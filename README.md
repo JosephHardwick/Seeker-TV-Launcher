@@ -1,6 +1,6 @@
 # Seeker TV
 
-A small, fast home screen for Google TV, drawn entirely on a canvas: a dot-matrix app wheel, plus three optional arcade "home modes" where you pick an app by playing a few seconds of a game. It replaces Google TV's own launcher, which frees a few hundred MB of RAM on low-memory TVs.
+A small, fast home screen for Google TV, drawn entirely on a canvas: a dot-matrix app wheel, plus four optional arcade "home modes" where you pick an app by playing a few seconds of a game. It replaces Google TV's own launcher, which frees a few hundred MB of RAM on low-memory TVs.
 
 Built and tested on one TV: a Hisense 55A53FUA (Google TV, Android 11, 2 GB RAM). It should work on other Google TV / Android TV 11+ devices, but nothing else has been tried.
 
@@ -15,7 +15,8 @@ Every build has the wheel. The game modes are optional (see [Flavors](#flavors))
 | **WHEEL**. Your apps as a dot-matrix wheel in each service's color. Up/Down spins, OK opens, hold OK to move or hide an app. Greeting, clock, date and weather on the right. | ![Wheel](docs/screens/wheel.png) |
 | **FLAP**. A flappy-bird run through tubes in each service's color. Fly through a tube to open that app. A rainbow strip along the top edge doubles as bias-light input. | ![Flap](docs/screens/flap.png) |
 | **INVADERS**. Your apps are the invaders. Shoot one to open it; the meteor is Settings. | ![Invaders](docs/screens/invaders.png) |
-| **HUNT**. An 8-bit duck hunt: each duck is an app. Left/Right picks a duck, tap OK to shoot (1 in 4 hits), hold OK to miss on purpose. The dog pops up to react. | ![Hunt](docs/screens/hunt.png) |
+| **HUNT**. An 8-bit duck hunt: each duck is an app. Left/Right picks a duck, tap OK to shoot (1 in 4 hits), hold OK for a guaranteed hit. The dog pops up to react. | ![Hunt](docs/screens/hunt.png) |
+| **PONG**. Pong against a CPU that never misses. The right edge is a beam of light in one service's brand color; every return moves it to the next service. Miss the ball and that service opens (SETTINGS is in the cycle too). Hold Up/Down to move. | |
 
 Settings (gear on the wheel, SETTINGS on each game's start screen): SYSTEM SETTINGS, INPUTS, HOME MODE, SOUND, **NAME** (the greeting is HELLO &lt;NAME&gt;, default SEEKER), **WEATHER LOCATION** (any city, default Denver), HIDDEN APPS, ABOUT.
 
@@ -29,7 +30,8 @@ One APK per flavor, all with the same app id (`com.seeker.tv`), so installing on
 | `seeker-flap-<version>.apk` | WHEEL + FLAP |
 | `seeker-invaders-<version>.apk` | WHEEL + INVADERS |
 | `seeker-hunt-<version>.apk` | WHEEL + HUNT |
-| `seeker-all-<version>.apk` | all four |
+| `seeker-pong-<version>.apk` | WHEEL + PONG |
+| `seeker-all-<version>.apk` | all five |
 
 Download them from [Releases](../../releases).
 
@@ -103,7 +105,7 @@ cd launcher
 
 Release signing reads `SEEKER_KEYSTORE`, `SEEKER_KEYSTORE_PASSWORD`, `SEEKER_KEY_ALIAS` and `SEEKER_KEY_PASSWORD` from the environment. APKs land in `launcher/app/build/outputs/apk/<flavor>/release/seeker-<flavor>-<version>.apk`.
 
-Source layout: shared code in `app/src/main`, each game in `app/src/modeFlap`, `modeInvaders`, `modeHunt`, and each flavor's mode list in `app/src/<flavor>/.../BuiltModes.kt`. The approved design mockups (open them in a browser) and specs are in `design/`; older mockups in `design/archive/`.
+Source layout: shared code in `app/src/main`, each game in `app/src/modeFlap`, `modeInvaders`, `modeHunt`, `modePong`, and each flavor's mode list in `app/src/<flavor>/.../BuiltModes.kt`. The approved design mockups (open them in a browser) and specs are in `design/`; older mockups in `design/archive/`.
 
 ## Trademarks and art
 

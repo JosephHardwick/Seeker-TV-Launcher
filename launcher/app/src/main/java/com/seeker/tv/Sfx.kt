@@ -36,6 +36,8 @@ object Sfx {
         // -32; v3 at +90 ms, v4 hit at +312 ms). HUNT_STEP and HUNT_FLAP are in the mockup's table but nothing in
         // v4 plays them.
         HUNT_LOCK, HUNT_SHOT_HIT, HUNT_SHOT_MISS, HUNT_STEP, HUNT_FLAP,
+        // Pong (design/seeker-pong-mockup-v1.html SFX). Serve and miss reuse MOVE and HIT.
+        PONG_PADDLE, PONG_CPU, PONG_WALL, PONG_CYCLE,
     }
 
     @Volatile var enabled = true
@@ -99,6 +101,10 @@ object Sfx {
         Id.HUNT_SHOT_MISS -> mix(mix(huntShot(), at(0.12f, huntMiss())), at(POP_UP, huntYip()))
         Id.HUNT_STEP -> tone(Wave.SQUARE, 90f, 70f, 0.03f, 0.04f)
         Id.HUNT_FLAP -> tone(Wave.SQUARE, 2200f, 1800f, 0.02f, 0.02f)
+        Id.PONG_PADDLE -> tone(Wave.SQUARE, 440f, 440f, 0.05f, 0.10f)
+        Id.PONG_CPU -> tone(Wave.SQUARE, 330f, 330f, 0.05f, 0.08f)
+        Id.PONG_WALL -> tone(Wave.SQUARE, 220f, 220f, 0.04f, 0.07f)
+        Id.PONG_CYCLE -> tone(Wave.TRIANGLE, 660f, 990f, 0.09f, 0.06f)
     }
 
     private const val POP_UP = 20f / 60  // the dog's frame 20, when the mockup plays the yip / hit jingle

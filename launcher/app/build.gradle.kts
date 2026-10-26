@@ -28,13 +28,15 @@ android {
         create("flap") { dimension = "modes" }
         create("invaders") { dimension = "modes" }
         create("hunt") { dimension = "modes" }
+        create("pong") { dimension = "modes" }
         create("all") { dimension = "modes" }
     }
     sourceSets {
         getByName("flap").java.srcDir("src/modeFlap/java")
         getByName("invaders").java.srcDir("src/modeInvaders/java")
         getByName("hunt").java.srcDir("src/modeHunt/java")
-        getByName("all").java.srcDirs("src/modeFlap/java", "src/modeInvaders/java", "src/modeHunt/java")
+        getByName("pong").java.srcDir("src/modePong/java")
+        getByName("all").java.srcDirs("src/modeFlap/java", "src/modeInvaders/java", "src/modeHunt/java", "src/modePong/java")
     }
 
     signingConfigs {

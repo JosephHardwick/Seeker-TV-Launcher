@@ -6,5 +6,6 @@ object BuiltModes {
         GameMode("FLAP") { c, h -> FlapView(c, h) },
         GameMode("INVADERS") { c, h -> InvadersView(c, h) },
         GameMode("HUNT") { c, h -> HuntView(c, h) },
+        GameMode("PONG") { c, h -> PongView(c, h) },
     )
 }

@@ -1,0 +1,249 @@
+<title>Seeker Pong</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a 1920x1080 TV stage scaled to fit. Single dark theme by design: it is a TV screen. */
+:root {
+  --bg: #0b0c0e; --panel: #121316; --dot: #2a2d33; --fg: #e8e9eb; --mute: #70757e; --dim: #3b3f46; --line: #1f2126;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { margin: 0; background: var(--panel); color: var(--fg); font-family: var(--mono);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px; }
+.wrap { max-width: 1400px; margin: 0 auto; display: grid; gap: 12px; }
+.frame { position: relative; width: 100%; aspect-ratio: 16 / 9; max-width: 100%; overflow: hidden; border-radius: 6px; background: var(--bg); box-shadow: 0 0 0 1px var(--line); }
+.stage { position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; transform-origin: 0 0; background: var(--bg); overflow: hidden; outline: none; }
+canvas { position: absolute; top: 0; left: 0; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; font-size: 13px; color: var(--mute); }
+button { font: inherit; font-size: 12px; letter-spacing: .06em; background: transparent; color: var(--mute); border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; cursor: pointer; }
+button:hover, button:focus-visible { color: var(--fg); border-color: var(--mute); outline: none; }
+button.on { color: var(--fg); border-color: var(--fg); }
+.note { font-size: 13px; color: var(--mute); line-height: 1.5; max-width: 72ch; }
+</style>
+
+<div class="wrap">
+  <div class="frame" id="frame">
+    <div class="stage" id="stage" tabindex="0" aria-label="Seeker Pong. Enter to start, hold up and down to move your paddle.">
+      <canvas id="c" width="1920" height="1080"></canvas>
+    </div>
+  </div>
+  <div class="controls">
+    <button id="focus">Click here, then Enter to start · hold ↑ ↓ to move · Esc = back to START</button>
+    <button id="mute" class="on">Sound on</button>
+  </div>
+  <p class="note">Playable mockup at 1920x1080. Enter is the remote's OK button. The beam of light on the right is a streaming service in its brand color. Every time you return the ball, the beam moves on to the next service (NEXT shows which). Miss the ball and the service on the beam "opens" (brand takeover), then it's back to START. SETTINGS is in the cycle too, as a gray beam. The CPU never misses, so the only way a point ends is you letting the ball past. Sound is synthesized in the page; the TV build uses the same waveforms.</p>
+</div>
+
+<script>
+(function(){
+  var F = {
+  A:["01110","10001","10001","11111","10001","10001","10001"],B:["11110","10001","10001","11110","10001","10001","11110"],C:["01111","10000","10000","10000","10000","10000","01111"],D:["11110","10001","10001","10001","10001","10001","11110"],E:["11111","10000","10000","11110","10000","10000","11111"],F:["11111","10000","10000","11110","10000","10000","10000"],G:["01111","10000","10000","10111","10001","10001","01111"],H:["10001","10001","10001","11111","10001","10001","10001"],I:["11111","00100","00100","00100","00100","00100","11111"],J:["00001","00001","00001","00001","10001","10001","01110"],K:["10001","10010","10100","11000","10100","10010","10001"],L:["10000","10000","10000","10000","10000","10000","11111"],M:["10001","11011","10101","10101","10001","10001","10001"],N:["10001","11001","10101","10011","10001","10001","10001"],O:["01110","10001","10001","10001","10001","10001","01110"],P:["11110","10001","10001","11110","10000","10000","10000"],Q:["01110","10001","10001","10001","10101","10010","01101"],R:["11110","10001","10001","11110","10100","10010","10001"],S:["01111","10000","10000","01110","00001","00001","11110"],T:["11111","00100","00100","00100","00100","00100","00100"],U:["10001","10001","10001","10001","10001","10001","01110"],V:["10001","10001","10001","10001","01010","01010","00100"],W:["10001","10001","10001","10101","10101","11011","10001"],X:["10001","10001","01010","00100","01010","10001","10001"],Y:["10001","10001","01010","00100","00100","00100","00100"],Z:["11111","00001","00010","00100","01000","10000","11111"],
+  "0":["01110","10001","10011","10101","11001","10001","01110"],"1":["00100","01100","00100","00100","00100","00100","01110"],"2":["01110","10001","00001","00010","00100","01000","11111"],"3":["11111","00010","00100","00010","00001","10001","01110"],"4":["00010","00110","01010","10010","11111","00010","00010"],"5":["11111","10000","11110","00001","00001","10001","01110"],"6":["00111","01000","10000","11110","10001","10001","01110"],"7":["11111","00001","00010","00100","01000","01000","01000"],"8":["01110","10001","10001","01110","10001","10001","01110"],"9":["01110","10001","10001","01111","00001","00010","11100"],
+  " ":["00000","00000","00000","00000","00000","00000","00000"],"+":["00000","00100","00100","11111","00100","00100","00000"],"-":["00000","00000","00000","11111","00000","00000","00000"],"!":["00100","00100","00100","00100","00100","00000","00100"]};
+
+  var APPS = [
+    {n:"NETFLIX", c:"#E50914", ink:"#fff"}, {n:"YOUTUBE", c:"#FF0000", ink:"#fff"}, {n:"HULU", c:"#1CE783", ink:"#0b0c0e"}, {n:"PRIME", c:"#00A8E1", ink:"#0b0c0e"},
+    {n:"DISNEY+", c:"#2E6BFF", ink:"#fff"}, {n:"MAX", c:"#3D34FF", ink:"#fff"}, {n:"PEACOCK", c:"#FFC72C", ink:"#0b0c0e"}, {n:"APPLE TV", c:"#F5F5F7", ink:"#0b0c0e"}];
+  var SETTINGS = {n:"SETTINGS", c:"#8F969F", ink:"#0b0c0e", settings: true};
+  var CYCLE = APPS.concat([SETTINGS]);   // the beam's order: the installed services, then SETTINGS
+
+  var stage = document.getElementById('stage'), frame = document.getElementById('frame');
+  var cv = document.getElementById('c'), x = cv.getContext('2d');
+  var CSS = getComputedStyle(document.documentElement), DOT = CSS.getPropertyValue('--dot').trim(), FG = CSS.getPropertyValue('--fg').trim(), DIM = CSS.getPropertyValue('--dim').trim(), MUTE = CSS.getPropertyValue('--mute').trim();
+  function fit(){ stage.style.transform = 'scale(' + (frame.clientWidth / 1920) + ')'; }
+  window.addEventListener('resize', fit); fit();
+
+  function dots(text, px, py, cell, color, grid, gridColor){
+    var r = cell*0.36, cx = px;
+    for (var i = 0; i < text.length; i++){ var g = F[text[i]] || F[" "];
+      for (var row = 0; row < 7; row++) for (var col = 0; col < 5; col++){ var lit = g[row][col] === "1"; if (!lit && !grid) continue;
+        x.beginPath(); x.arc(cx + col*cell + cell/2, py + row*cell + cell/2, lit ? r : r*0.7, 0, 6.2832); x.fillStyle = lit ? color : (gridColor||DOT); x.fill(); }
+      cx += cell*6; }
+  }
+  function textW(t, cell){ return t.length*cell*6 - cell; }
+  function block(cols, rows, px, py, cell, color){ var r = cell*0.42; x.fillStyle = color;   // a solid cols x rows block of dots
+    for (var row = 0; row < rows; row++) for (var col = 0; col < cols; col++){ x.beginPath(); x.arc(px + col*cell + cell/2, py + row*cell + cell/2, r, 0, 6.2832); x.fill(); } }
+  function rgba(hex, a){ var n = parseInt(hex.slice(1), 16); return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')'; }
+
+  // ---------- sound (synthesized; same recipes go to the TV build) ----------
+  var AC = null, muted = false;
+  function audio(){ if (!AC){ try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){ AC = null; } } if (AC && AC.state === 'suspended') AC.resume(); return AC; }
+  function tone(type, f0, f1, dur, gain){ var a = audio(); if (!a || muted) return; var o = a.createOscillator(), g = a.createGain(), t0 = a.currentTime;
+    o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+    g.gain.setValueAtTime(gain, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur); o.connect(g); g.connect(a.destination); o.start(t0); o.stop(t0 + dur); }
+  function noise(dur, gain){ var a = audio(); if (!a || muted) return; var n = a.sampleRate*dur, buf = a.createBuffer(1, n, a.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < n; i++) d[i] = (Math.random()*2 - 1) * (1 - i/n); var s = a.createBufferSource(), g = a.createGain(), f = a.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900;
+    s.buffer = buf; g.gain.value = gain; s.connect(f); f.connect(g); g.connect(a.destination); s.start(); }
+  var SFX = {
+    move:   function(){ tone('square', 180, 180, 0.045, 0.08); },              // serve (Invaders' move blip)
+    paddle: function(){ tone('square', 440, 440, 0.05, 0.10); },               // your return
+    cpu:    function(){ tone('square', 330, 330, 0.05, 0.08); },               // CPU return
+    wall:   function(){ tone('square', 220, 220, 0.04, 0.07); },
+    cycle:  function(){ tone('triangle', 660, 990, 0.09, 0.06); },             // the beam moves on
+    miss:   function(){ noise(0.35, 0.5); tone('square', 120, 40, 0.3, 0.2); } // Invaders' hit
+  };
+  document.getElementById('mute').addEventListener('click', function(){ muted = !muted; this.textContent = muted ? 'Sound off' : 'Sound on'; this.className = muted ? '' : 'on'; });
+
+  // ---------- game ----------
+  var W = 1920, H = 1080, MID = 580;
+  var TOP = 150, BOT = 1010, CELL = 16, IN_T = TOP + 10, IN_B = BOT - 10;     // walls: dot rows centered on TOP and BOT
+  var PAD_H = 8*CELL, PAD_W = CELL, PX = 150, CX = 1720, PAD_SPEED = 13, CPU_SPEED = 12, CPU_IDLE = 6, CPU_AIM = 44;
+  var BALL = 28, BALL_CELL = 14, SERVE_AT = 45, MAX_ANG = Math.PI/4, SERVE_ANG = 20*Math.PI/180;
+  // Original Pong pacing: the ball speeds up only after the 4th and the 12th hit (both paddles), a little faster here.
+  var SPEEDS = [10, 13, 16], HITS_FAST = [4, 12];
+  function tier(hits){ return SPEEDS[hits >= HITS_FAST[1] ? 2 : hits >= HITS_FAST[0] ? 1 : 0]; }
+  var BEAM_X = 1880, BEAM_R = 900, BAND = 260, FADE = 12, START_CYCLE = 90;
+  var CRASH_END = 130, TO_SETTINGS = 16;   // the TV build launches at frame 54 of the crash
+
+  var mode = 'start', t = 0, menuSel = 0;
+  var py, cy, up = false, down = false, ball, speed, hits, serveT, rally, beam = 0, beamFrom = -1, beamT = FADE, cpuAim, hit, hitT, boom;
+  function reset(){ py = cy = MID - PAD_H/2; ball = null; hits = 0; speed = SPEEDS[0]; serveT = 0; rally = 0; beam = 0; beamFrom = -1; beamT = FADE; cpuAim = MID; hit = null; hitT = 0; boom = null; up = down = false; }
+  reset();
+
+  function clampPad(y){ return Math.max(IN_T, Math.min(IN_B - PAD_H, y)); }
+  function nextBeam(sound){ beamFrom = beam; beam = (beam + 1) % CYCLE.length; beamT = 0; if (sound) SFX.cycle(); }
+
+  // Where the ball's center will be when it reaches the CPU's face, wall bounces folded in.
+  function predict(){
+    var lo = IN_T + BALL/2, hi = IN_B - BALL/2, span = hi - lo;
+    var bx = ball.x + BALL/2, by = ball.y + BALL/2, faceX = CX - PAD_W/2 - BALL/2;
+    var y = by + ball.vy * ((faceX - bx) / ball.vx), m = ((y - lo) % (2*span) + 2*span) % (2*span);
+    return m <= span ? lo + m : lo + 2*span - m;
+  }
+  function aimCpu(){ cpuAim = predict() + (Math.random()*2 - 1) * CPU_AIM; }   // meet it off-center so returns vary
+  function serve(){ var a = (Math.random()*2 - 1) * SERVE_ANG; speed = tier(hits);
+    ball = {x: W/2 - BALL/2, y: MID - BALL/2, vx: speed*Math.cos(a), vy: speed*Math.sin(a)}; aimCpu(); SFX.move(); }
+  function bounce(padY, dir){ // dir +1 = to the right
+    var off = ((ball.y + BALL/2) - (padY + PAD_H/2)) / (PAD_H/2 + BALL/2); off = Math.max(-1, Math.min(1, off));
+    var a = off*MAX_ANG; ball.vx = dir*speed*Math.cos(a); ball.vy = speed*Math.sin(a); }
+  function overlapsY(padY){ return ball.y + BALL >= padY && ball.y <= padY + PAD_H; }
+
+  function step(){
+    t++;
+    if (beamT < FADE) beamT++;
+    if (mode === 'start' && t % START_CYCLE === 0) nextBeam(false);
+    if (mode === 'play'){
+      if (up) py -= PAD_SPEED;
+      if (down) py += PAD_SPEED;
+      py = clampPad(py);
+      if (!ball){ if (++serveT >= SERVE_AT) serve(); }
+      // CPU: toward the predicted contact point while the ball comes at it, back to the middle otherwise
+      var coming = ball && ball.vx > 0, want = (coming ? cpuAim : MID) - PAD_H/2, cap = coming ? CPU_SPEED : CPU_IDLE;
+      cy = clampPad(cy + Math.max(-cap, Math.min(cap, want - cy)));
+      if (ball){
+        ball.x += ball.vx; ball.y += ball.vy;
+        if (ball.y < IN_T){ ball.y = 2*IN_T - ball.y; ball.vy = -ball.vy; SFX.wall(); }
+        if (ball.y + BALL > IN_B){ ball.y = 2*(IN_B - BALL) - ball.y; ball.vy = -ball.vy; SFX.wall(); }
+        if (ball.vx < 0 && ball.x <= PX + PAD_W/2 && ball.x + BALL >= PX - PAD_W/2 && overlapsY(py)){
+          ball.x = PX + PAD_W/2; speed = tier(++hits); bounce(py, 1); rally++; SFX.paddle(); nextBeam(true); aimCpu();
+        } else if (ball.vx > 0 && ball.x + BALL >= CX - PAD_W/2){
+          ball.x = CX - PAD_W/2 - BALL; speed = tier(++hits); bounce(cy, -1); SFX.cpu();   // the CPU never misses
+        } else if (ball.x + BALL < 0){
+          var app = CYCLE[beam]; ball = null; hitT = 0; SFX.miss();
+          if (app.settings){ boom = {x: BEAM_X, y: MID, c: app.c, t: 0}; mode = 'tosettings'; }
+          else { hit = {app: app}; mode = 'crash'; }
+        }
+      }
+    }
+    if (boom){ boom.t++; if (boom.t > 14) boom = null; }
+    if (mode === 'crash'){ hitT++; if (hitT > CRASH_END){ mode = 'start'; menuSel = 0; reset(); } }
+    if (mode === 'tosettings'){ hitT++; if (hitT > TO_SETTINGS){ mode = 'settings'; menuSel = 0; } }
+    draw();
+    requestAnimationFrame(step);
+  }
+
+  // ---------- drawing ----------
+  function rainbow(){
+    var cell = 16, rows = 3, play = mode === 'play' || mode === 'crash', speed = play ? 1.2 : 0.5, sat = play ? 100 : 70, lum = play ? 55 : 42;
+    for (var row = 0; row < rows; row++) for (var gx = 0; gx < W; gx += cell){ var h = ((gx / W) * 360 + t * speed + row * 12) % 360;
+      x.fillStyle = 'hsl(' + h + ',' + sat + '%,' + lum + '%)'; x.beginPath(); x.arc(gx + cell/2, row*cell + cell/2, cell*0.34, 0, 6.2832); x.fill(); }
+    for (var gx2 = 0; gx2 < W; gx2 += 24){ var h2 = ((gx2 / W) * 360 + t * speed) % 360, g = x.createLinearGradient(0, rows*cell, 0, rows*cell + 200);
+      g.addColorStop(0, 'hsla(' + h2 + ',100%,55%,' + (play ? 0.22 : 0.10) + ')'); g.addColorStop(1, 'hsla(' + h2 + ',100%,55%,0)'); x.fillStyle = g; x.fillRect(gx2, rows*cell, 24, 200); }
+  }
+  // The beam: a brand-color glow from the right edge (the wheel's left-edge glow, mirrored and stronger), a band, and a lamp column.
+  function beamLight(app, a){
+    var g = x.createRadialGradient(W, MID, 0, W, MID, BEAM_R); g.addColorStop(0, rgba(app.c, 0.30*a)); g.addColorStop(0.7, rgba(app.c, 0)); x.fillStyle = g; x.fillRect(W - BEAM_R, 0, BEAM_R, H);
+    var b = x.createLinearGradient(W, 0, W - BAND, 0); b.addColorStop(0, rgba(app.c, 0.26*a)); b.addColorStop(1, rgba(app.c, 0)); x.fillStyle = b; x.fillRect(W - BAND, 0, BAND, H);
+    x.fillStyle = rgba(app.c, a); for (var y = TOP; y <= BOT; y += CELL){ x.beginPath(); x.arc(BEAM_X, y, CELL*0.36, 0, 6.2832); x.fill(); }
+  }
+  function backdrop(){
+    x.fillStyle = '#0b0c0e'; x.fillRect(0,0,W,H);
+    x.fillStyle = '#16181c'; for (var gx = 12; gx < W; gx += 24) for (var gy = 60; gy < H; gy += 24){ x.beginPath(); x.arc(gx, gy, 1.6, 0, 6.2832); x.fill(); }
+    var k = beamT / FADE, s = mode === 'start' ? 0.6 : 1;
+    if (beamFrom >= 0 && k < 1) beamLight(CYCLE[beamFrom], (1 - k)*s);
+    beamLight(CYCLE[beam], (beamFrom >= 0 ? k : 1)*s);
+    rainbow();
+  }
+  function court(){
+    x.fillStyle = DIM; for (var gx = 96; gx <= 1824; gx += CELL){ x.beginPath(); x.arc(gx, TOP, CELL*0.3, 0, 6.2832); x.fill(); x.beginPath(); x.arc(gx, BOT, CELL*0.3, 0, 6.2832); x.fill(); }
+    x.fillStyle = DOT; for (var y = TOP + 36; y < BOT - 18; y += 36){ x.beginPath(); x.arc(W/2, y, 4, 0, 6.2832); x.fill(); }
+  }
+  function label(){
+    var app = CYCLE[beam], cell = 6, w = textW(app.n, cell); dots(app.n, BEAM_X - w, 66, cell, app.c, false);
+    var nx = "NEXT " + CYCLE[(beam + 1) % CYCLE.length].n, nc = 3.5, nw = textW(nx, nc); dots(nx, BEAM_X - nw, 116, nc, MUTE, false);
+  }
+  function drawPlay(){
+    court(); label();
+    block(1, 8, PX - PAD_W/2, py, CELL, FG); block(1, 8, CX - PAD_W/2, cy, CELL, FG);
+    if (ball) block(2, 2, ball.x, ball.y, BALL_CELL, FG);
+    var r = "RALLY " + rally, rc = 8, rw = textW(r, rc); dots(r, (W - rw)/2, 66, rc, FG, true);
+  }
+  function drawStart(){
+    var title = "SEEKER PONG", cell = 16, w = textW(title, cell); dots(title, (W - w)/2, 300, cell, FG, true);
+    // blinking START, old-school
+    if (Math.floor(t/30) % 2 === 0 || menuSel === 1){ var s = "START", sc = 10, sw = textW(s, sc); dots(s, (W - sw)/2, 560, sc, menuSel === 0 ? FG : MUTE, menuSel === 0); }
+    var g = "SETTINGS", gc = 7, gw = textW(g, gc); dots(g, (W - gw)/2, 700, gc, menuSel === 1 ? FG : DIM, menuSel === 1);
+    var h = "RALLY TO CYCLE  MISS TO OPEN", hc = 4, hw = textW(h, hc); dots(h, (W - hw)/2, 840, hc, DIM, false);
+    block(1, 8, PX - PAD_W/2, MID - PAD_H/2, CELL, DIM); block(1, 8, CX - PAD_W/2, MID - PAD_H/2, CELL, DIM);
+    label();
+  }
+  function drawSettings(){
+    var items = ["APP LIST", "GREETING", "HIDDEN APPS", "SYSTEM SETTINGS", "BACK"], cell = 9, y = 300;
+    var h = "SETTINGS", hc = 12, hw = textW(h, hc); dots(h, (W - hw)/2, 160, hc, FG, true);
+    items.forEach(function(it, i){ var w = textW(it, cell); dots(it, (W - w)/2, y + i*110, cell, i === menuSel ? FG : DIM, i === menuSel); });
+  }
+  function drawBoom(){ if (!boom) return; var k = boom.t/14, r = 20 + k*70; x.strokeStyle = boom.c; x.lineWidth = 6*(1-k); x.globalAlpha = 1 - k;
+    for (var i = 0; i < 8; i++){ var ang = i*Math.PI/4; x.beginPath(); x.moveTo(boom.x + Math.cos(ang)*r*0.4, boom.y + Math.sin(ang)*r*0.4); x.lineTo(boom.x + Math.cos(ang)*r, boom.y + Math.sin(ang)*r); x.stroke(); }
+    x.globalAlpha = 1; }
+  function drawTakeover(){
+    var k = Math.min(1, hitT/22), r = k*k*2300, app = hit.app;
+    x.fillStyle = app.c; x.beginPath(); x.arc(W, MID, r, 0, 6.2832); x.fill();   // grows out of the beam
+    if (hitT > 20){ var n = app.n, cell = n.length > 7 ? 18 : 24, w = textW(n, cell), faint = app.ink === '#fff' ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.18)';
+      block(2, 2, W/2 - BALL_CELL, 540 - 7*cell/2 - 100, BALL_CELL, app.ink);
+      dots(n, (W - w)/2, 540 - 7*cell/2, cell, app.ink, true, faint);
+      x.fillStyle = app.ink; x.font = '500 22px ' + CSS.getPropertyValue('--mono'); x.textAlign = 'center'; x.letterSpacing = '0.3em'; x.fillText('OPENING', 960, 540 + 7*cell/2 + 70);
+      var s = "RALLY " + rally, sc = 6, sw = textW(s, sc); dots(s, (W - sw)/2, 540 + 7*cell/2 + 120, sc, app.ink, false); }
+  }
+  function draw(){
+    backdrop();
+    if (mode === 'start') drawStart();
+    else if (mode === 'settings') drawSettings();
+    else { drawPlay(); drawBoom(); if (mode === 'crash') drawTakeover(); }
+  }
+  requestAnimationFrame(step);
+
+  // ---------- remote ----------
+  stage.addEventListener('keydown', function(e){
+    var k = e.key; e.preventDefault();
+    if (e.repeat) return;   // key repeat ignored; the paddle moves while the key is held (key down .. key up)
+    audio();
+    if (mode === 'start'){
+      if (k === 'ArrowDown') menuSel = 1; else if (k === 'ArrowUp') menuSel = 0;
+      else if (k === 'Enter' || k === ' '){ if (menuSel === 0){ reset(); mode = 'play'; } else { mode = 'settings'; menuSel = 0; } }
+    }
+    else if (mode === 'play'){
+      if (k === 'ArrowUp') up = true; else if (k === 'ArrowDown') down = true;
+      else if (k === 'Escape' || k === 'Backspace'){ mode = 'start'; menuSel = 0; reset(); }
+    }
+    else if (mode === 'settings'){
+      if (k === 'ArrowDown') menuSel = Math.min(4, menuSel+1); else if (k === 'ArrowUp') menuSel = Math.max(0, menuSel-1);
+      else if (k === 'Escape' || k === 'Backspace' || ((k === 'Enter' || k === ' ') && menuSel === 4)){ mode = 'start'; menuSel = 0; reset(); }
+    }
+  });
+  stage.addEventListener('keyup', function(e){ if (e.key === 'ArrowUp') up = false; else if (e.key === 'ArrowDown') down = false; });
+  stage.addEventListener('blur', function(){ up = down = false; });
+  stage.addEventListener('click', function(){ stage.focus(); audio(); });
+  document.getElementById('focus').addEventListener('click', function(){ stage.focus(); audio(); });
+})();
+</script>
