@@ -66,6 +66,20 @@ class SeekerView(ctx: Context, private val host: Host) : View(ctx) {
         const val PANEL_BG = 0xFF0E0F12.toInt()
         const val LINE = 0xFF1F2126.toInt()
         val MENU = listOf("MOVE", "HIDE", "CANCEL")
+        // v5 system widgets (design/seeker-tv-mockup-v4.html): cards under the weather, right-aligned at x=1770
+        const val W_W = 400f
+        const val W_H = 88f
+        const val W_GAP = 12f
+        const val W_TOP = 532f
+        const val W_RAD = 22f
+        const val RING_R = 26f
+        const val RING_W = 8f
+        const val HOT = 0.9f               // ring turns red at 90%
+        const val HOT_C = 0xFFFF453A.toInt()
+        const val CARD_BG = 0xFF121316.toInt()
+        const val W_JUMP = 0.10f           // sweep only changes of 10 points or more; smaller ones snap (one redraw)
+        val W_LABELS = arrayOf("CPU", "MEMORY", "STORAGE")
+        val W_COLORS = intArrayOf(0xFF30D158.toInt(), 0xFF0A84FF.toInt(), 0xFFFF9F0A.toInt())
     }
 
     // css cubic-beziers from the mockup
@@ -162,6 +176,8 @@ class SeekerView(ctx: Context, private val host: Host) : View(ctx) {
         pathEffect = DashPathEffect(floatArrayOf(6f, 6f), 0f)
     }
     private val linePaint = Paint().apply { style = Paint.Style.STROKE; strokeWidth = 1f; color = LINE }
+    private val cardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = 1f }
+    private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = RING_W; strokeCap = Paint.Cap.ROUND }
     private val monoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Typeface.create(Typeface.MONOSPACE, 500, false)
         textSize = 22f
@@ -206,6 +222,39 @@ class SeekerView(ctx: Context, private val host: Host) : View(ctx) {
     fun setGreeting(g: String) { greeting = g; panel = null; invalidate() }
     fun setWeather(w: Weather.Now) { weather = w; panel = null; invalidate() }
     fun tick() { panel = null; invalidate() }
+
+    // ---------- v5 system widgets ----------
+    private var statsOn = false
+    private val statShown = FloatArray(3)
+    private val statFrom = FloatArray(3)
+    private val statTo = FloatArray(3)
+    private val statDetail = arrayOf("", "", "")
+    private val statsAnim = ValueAnimator.ofFloat(0f, 1f).apply {
+        duration = 400  // re-read with ms() on each start
+        interpolator = cssEase
+        addUpdateListener { a ->
+            val k = a.animatedValue as Float
+            for (i in 0 until 3) statShown[i] = statFrom[i] + (statTo[i] - statFrom[i]) * k
+            invalidate()
+        }
+    }
+
+    /** STATS FOR NERDS turned off: the cards go until the next setStats(). */
+    fun hideStats() { statsAnim.cancel(); statsOn = false; for (i in 0 until 3) statShown[i] = 0f; invalidate() }
+
+    /** New readings (0..1) for CPU, MEMORY, STORAGE. Rings sweep on a real change, otherwise one redraw. */
+    fun setStats(values: FloatArray, details: Array<String>) {
+        var jump = !statsOn
+        for (i in 0 until 3) {
+            statFrom[i] = statShown[i]; statTo[i] = values[i]; statDetail[i] = details[i]
+            if (abs(values[i] - statShown[i]) >= W_JUMP) jump = true
+        }
+        statsOn = true
+        statsAnim.cancel()
+        statsAnim.duration = ms(400)
+        if (jump && statsAnim.duration > 0) statsAnim.start()
+        else { for (i in 0 until 3) statShown[i] = statTo[i]; invalidate() }
+    }
 
     /** Called when we come back to the front (or the launch never happened): clear the takeover. */
     fun resetLaunch() {
@@ -436,6 +485,7 @@ class SeekerView(ctx: Context, private val host: Host) : View(ctx) {
         canvas.drawRect(0f, 0f, W, H, gridPaint)
         drawGlow(canvas)
         drawPanel(canvas)
+        drawWidgets(canvas)
         drawCursor(canvas)
         drawWheel(canvas)
         drawMenu(canvas)
@@ -460,6 +510,34 @@ class SeekerView(ctx: Context, private val host: Host) : View(ctx) {
             glowPaint.shader = glowShader
         }
         c.drawRect(0f, 0f, W, H, glowPaint)
+    }
+
+    /** v5: CPU / MEMORY / STORAGE cards under the weather: ring gauge, label, value, detail (mockup v4 card()). */
+    private fun drawWidgets(c: Canvas) {
+        if (!statsOn) return
+        val x0 = W - 150 - W_W
+        for (i in 0 until 3) {
+            val y0 = W_TOP + i * (W_H + W_GAP)
+            val v = statShown[i]
+            val color = if (v >= HOT) HOT_C else W_COLORS[i]
+            cardPaint.style = Paint.Style.FILL; cardPaint.color = CARD_BG
+            c.drawRoundRect(x0 + 0.5f, y0 + 0.5f, x0 + W_W - 0.5f, y0 + W_H - 0.5f, W_RAD, W_RAD, cardPaint)
+            cardPaint.style = Paint.Style.STROKE; cardPaint.color = LINE
+            c.drawRoundRect(x0 + 0.5f, y0 + 0.5f, x0 + W_W - 0.5f, y0 + W_H - 0.5f, W_RAD, W_RAD, cardPaint)
+            val cx = x0 + 46
+            val cy = y0 + W_H / 2
+            ringPaint.color = Dots.fade(color, 0.2f)  // tinted track
+            c.drawCircle(cx, cy, RING_R, ringPaint)
+            if (v > 0.005f) {
+                ringPaint.color = color
+                c.drawArc(cx - RING_R, cy - RING_R, cx + RING_R, cy + RING_R, -90f, v * 360f, false, ringPaint)
+            }
+            val tx = x0 + 92
+            Dots.text(c, W_LABELS[i], tx, y0 + 13, 3.5f, Dots.MUTE, false)
+            Dots.text(c, "${Math.round(v * 100)}%", tx, y0 + 45, 5f, Dots.FG, false)
+            val d = statDetail[i]
+            Dots.text(c, d, W - 150 - 22 - Dots.textW(d, 3f), y0 + 54, 3f, Dots.MUTE, false)
+        }
     }
 
     /** Greeting / time / date / weather, right-aligned at x=1770 from y=120. Re-recorded once a minute. */

@@ -73,3 +73,23 @@ Gray group at the bottom of the wheel is now just Play Store (Inputs moved to se
 
 ### Open-and-return
 BACK on the settings screen or any sub-list returns one level. BACK on the wheel does nothing.
+
+## v5 changes (owner, 2026-10-26): system widgets on the wheel
+Mockup: `design/seeker-tv-mockup-v4.html` (v3 plus the widgets; Widgets buttons simulate Calm / Busy / Storage full).
+
+### STATS FOR NERDS (settings toggle, OFF by default)
+- New settings row under SOUND: **STATS FOR NERDS: ON / OFF**, saved as `stats` (default false), in both the dot-matrix and the HUNT-style settings. OFF = the wheel looks exactly like v4 and nothing is sampled; ON = the cards below.
+
+### CPU / MEMORY / STORAGE cards under the weather
+- Three Apple-style cards stacked under the weather row, right-aligned with the panel at x=1770: 400x88, corner radius 22, fill #121316, 1 px border #1F2126, 12 px apart, first at y=532 (so 532 / 632 / 732; ~40 px clear of the weather above and the gear below). They sit under the takeover like the panel does.
+- Each card: ring gauge centered (x0+46, mid), radius 26, stroke 8, round caps, track = the ring color at 20%, arc from 12 o'clock clockwise. Label at (x0+92, y0+13) cell 3.5 #70757E; value "NN%" at (x0+92, y0+45) cell 5 #E8E9EB; detail right-aligned to x=1748 at y0+54, cell 3, #70757E.
+- Colors (Apple system): CPU #30D158, MEMORY #0A84FF, STORAGE #FF9F0A; any ring at 90% or more turns #FF453A.
+- Details: CPU = fastest core's current clock ("1.4 GHZ"); MEMORY = used/total in GB ("1.8/2.9 GB"); STORAGE = used/total GB ("9/24 GB").
+- New glyph: '%' = 11001 11010 00010 00100 01000 01011 10011.
+
+### Readings (TV)
+- CPU: apps can't read /proc/stat (Android 8+). Every core's `/sys/devices/system/cpu/cpuN/cpuidle/state*/time` (µs) is readable: busy = 1 - Δidle / (Δwall x online cores) between samples. Checked on the onn 4K Pro: ~5% idle-screen load, matching `top`.
+- MEMORY: `ActivityManager.MemoryInfo`, used = total - avail (avail counts reclaimable cache, as Settings does).
+- STORAGE: `StatFs` on the data partition, decimal GB.
+- CPU and MEMORY every 2 s, STORAGE every 30 s, only while the wheel is the screen shown (stopped in game modes, other apps and screen off). The first CPU reading comes 1 s after the wheel starts (counters primed on start).
+- CPU is averaged with the previous reading (steadier ring). Rings sweep 400 ms only on a change of 10 points or more; smaller changes snap in a single redraw, so an idle home screen redraws about once every 2 s. (First cut swept on 3 points: CPU jitter made the wheel redraw ~7 frames/s at idle.)

@@ -51,6 +51,8 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
         fun openAppList()
         fun soundOn(): Boolean
         fun toggleSound()
+        fun statsOn(): Boolean            // v5: CPU / MEMORY / STORAGE widgets on the wheel
+        fun toggleStats()
     }
 
     private companion object {
@@ -65,7 +67,7 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
         const val TITLE_CELL = 12f
         const val LIST_TOP = 330f
         const val VALUE_X = 1100f
-        val MAIN = listOf("SYSTEM SETTINGS", "INPUTS", "HOME MODE", "SOUND", "NAME", "WEATHER LOCATION", "HIDDEN APPS", "ABOUT")
+        val MAIN = listOf("SYSTEM SETTINGS", "INPUTS", "HOME MODE", "SOUND", "STATS FOR NERDS", "NAME", "WEATHER LOCATION", "HIDDEN APPS", "ABOUT")
         const val ROW_SP = 104f
         const val LAST_ROW = 1000f  // lowest row center
         const val HUNT_VALUE = 0xFFBCBCBC.toInt()  // HUNT style: values and visible apps
@@ -184,6 +186,7 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
             "INPUTS" -> host.openInputs()
             "HOME MODE" -> { host.cycleHomeMode(); modeChanged() }
             "SOUND" -> host.toggleSound()
+            "STATS FOR NERDS" -> host.toggleStats()
             "NAME" -> host.editName()
             "WEATHER LOCATION" -> host.editWeatherPlace()
             "HIDDEN APPS" -> {
@@ -276,6 +279,7 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
             val v = when (label) {
                 "HOME MODE" -> host.homeMode()
                 "SOUND" -> if (host.soundOn()) "ON" else "OFF"
+                "STATS FOR NERDS" -> if (host.statsOn()) "ON" else "OFF"
                 "NAME" -> host.name()
                 "WEATHER LOCATION" -> host.weatherPlace()
                 "HIDDEN APPS" -> "${host.hiddenKeys().count { k -> host.allApps().any { it.key == k } }} HIDDEN"
@@ -355,6 +359,7 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
             val v = when (label) {
                 "HOME MODE" -> host.homeMode()
                 "SOUND" -> if (host.soundOn()) "ON" else "OFF"
+                "STATS FOR NERDS" -> if (host.statsOn()) "ON" else "OFF"
                 "NAME" -> host.name()
                 "WEATHER LOCATION" -> host.weatherPlace()
                 "HIDDEN APPS" -> "${host.hiddenKeys().count { k -> host.allApps().any { it.key == k } }}"
