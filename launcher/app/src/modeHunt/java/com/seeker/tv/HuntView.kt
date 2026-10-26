@@ -16,7 +16,7 @@ import kotlin.math.sin
 /**
  * Seeker Hunt (M8): HOME MODE = HUNT. 8-bit, not dot matrix. The sight locks onto a duck, LEFT/RIGHT
  * jump it to the nearest duck on that side, and the shotgun at the bottom swings to aim at the sight.
- * Tap OK: one in four hits. Hold OK 600 ms: a guaranteed miss. The dog pops up out of the grass to grin
+ * Tap OK: one in four hits. Hold OK 600 ms: a guaranteed hit (v5). The dog pops up out of the grass to grin
  * at a miss or hold up the duck on a hit; after he sinks on a hit the takeover runs and the service
  * opens ~900 ms in. START (dog peeking, SETTINGS under it on DOWN).
  * Sprites, palette, motion, nextTarget(), shoot(), drawPop(), drawGun(), screens and sounds are ported
@@ -35,7 +35,7 @@ class HuntView(ctx: Context, private val host: GameHost) : View(ctx), GameScreen
         const val DW = 16 * PX
         const val DH = 12 * PX
         const val HIT_RATE = 0.25  // tap OK: one in four hits
-        const val HOLD_MS = 600L   // hold OK this long: a guaranteed miss, fired at the 600 ms mark
+        const val HOLD_MS = 600L   // hold OK this long: a guaranteed hit, fired at the 600 ms mark
         const val LAUNCH_AT = 54   // frames into the takeover: the intent fires ~900 ms after it starts
         const val CRASH_END = 130  // frames: back to START if nothing launched (mockup)
         const val STEP_NS = 1_000_000_000L / 60
@@ -116,7 +116,7 @@ class HuntView(ctx: Context, private val host: GameHost) : View(ctx), GameScreen
     private var pop: Pop? = null
     private var launched = false
 
-    // hold-to-miss (mockup holdTimer / held / armed)
+    // hold-to-hit (mockup holdTimer / held / armed)
     private var held = false
     private var armed = false
     private val holdTimer = Runnable { if (armed && mode == Mode.PLAY) { held = true; shoot(true) } }
@@ -208,12 +208,12 @@ class HuntView(ctx: Context, private val host: GameHost) : View(ctx), GameScreen
         if (best >= 0) { target = best; Sfx.play(Sfx.Id.HUNT_LOCK) }
     }
 
-    /** Tap OK: 25% hit. Hold OK (600 ms): guaranteed miss. The dog pops up either way; on a hit the takeover runs after he sinks. */
-    private fun shoot(forceMiss: Boolean) {
+    /** Tap OK: 25% hit. Hold OK (600 ms): guaranteed hit. The dog pops up either way; on a hit the takeover runs after he sinks. */
+    private fun shoot(forceHit: Boolean) {
         if (pop != null) return
         shots++; flash = 6
         val b = birds[target]
-        if (forceMiss || Math.random() >= HIT_RATE) {
+        if (!forceHit && Math.random() >= HIT_RATE) {
             Sfx.play(Sfx.Id.HUNT_SHOT_MISS)  // shot, miss at 120 ms, yip when the dog is up (one buffer)
             missT = 70; missAtX = b.x; missAtY = b.y; b.flee = 60
             pop = Pop(false, 0, b.duck)
