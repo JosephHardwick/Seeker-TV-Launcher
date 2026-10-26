@@ -38,6 +38,8 @@ object Sfx {
         HUNT_LOCK, HUNT_SHOT_HIT, HUNT_SHOT_MISS, HUNT_STEP, HUNT_FLAP,
         // Pong (design/seeker-pong-mockup-v1.html SFX). Serve and miss reuse MOVE and HIT.
         PONG_PADDLE, PONG_CPU, PONG_WALL, PONG_CYCLE,
+        // SLATE (design/SLATE-SPEC.md): quiet sine ticks
+        SLATE_TICK, SLATE_OK, SLATE_MENU,
     }
 
     @Volatile var enabled = true
@@ -105,6 +107,9 @@ object Sfx {
         Id.PONG_CPU -> tone(Wave.SQUARE, 330f, 330f, 0.05f, 0.08f)
         Id.PONG_WALL -> tone(Wave.SQUARE, 220f, 220f, 0.04f, 0.07f)
         Id.PONG_CYCLE -> tone(Wave.TRIANGLE, 660f, 990f, 0.09f, 0.06f)
+        Id.SLATE_TICK -> tone(Wave.SINE, 1600f, 1600f, 0.014f, 0.035f)
+        Id.SLATE_OK -> tone(Wave.SINE, 880f, 1320f, 0.06f, 0.05f)
+        Id.SLATE_MENU -> tone(Wave.SINE, 660f, 660f, 0.04f, 0.04f)
     }
 
     private const val POP_UP = 20f / 60  // the dog's frame 20, when the mockup plays the yip / hit jingle
@@ -123,7 +128,7 @@ object Sfx {
         return FloatArray(pad + buf.size) { if (it < pad) 0f else buf[it - pad] }
     }
 
-    private enum class Wave { SQUARE, SAW, TRIANGLE }
+    private enum class Wave { SQUARE, SAW, TRIANGLE, SINE }
 
     private fun tone(w: Wave, f0: Float, f1: Float, dur: Float, gain: Float): FloatArray {
         val n = (RATE * dur).toInt()
@@ -139,6 +144,7 @@ object Sfx {
                 Wave.SQUARE -> if (fr < 0.5) 1.0 else -1.0
                 Wave.SAW -> 2 * fr - 1
                 Wave.TRIANGLE -> 1 - 4 * abs(fr - 0.5)
+                Wave.SINE -> sin(2 * PI * fr)
             }
             out[i] = (v * g).toFloat()
             ph += f / RATE

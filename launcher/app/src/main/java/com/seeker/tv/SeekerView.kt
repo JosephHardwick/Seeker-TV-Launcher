@@ -33,7 +33,7 @@ import kotlin.math.min
  * Layout numbers, colors and timings are ported from design/seeker-tv-mockup-v3.html.
  */
 @SuppressLint("ViewConstructor")
-class SeekerView(ctx: Context, private val host: Host) : View(ctx) {
+class SeekerView(ctx: Context, private val host: Host) : View(ctx), HomeScreen {
 
     interface Host {
         fun launch(entry: AppEntry)
@@ -220,8 +220,9 @@ class SeekerView(ctx: Context, private val host: Host) : View(ctx) {
     }
 
     fun setGreeting(g: String) { greeting = g; panel = null; invalidate() }
-    fun setWeather(w: Weather.Now) { weather = w; panel = null; invalidate() }
-    fun tick() { panel = null; invalidate() }
+    override fun showApps(list: List<AppEntry>) = setApps(list)
+    override fun setWeather(w: Weather.Now) { weather = w; panel = null; invalidate() }
+    override fun tick() { panel = null; invalidate() }
 
     // ---------- v5 system widgets ----------
     private var statsOn = false
@@ -240,10 +241,10 @@ class SeekerView(ctx: Context, private val host: Host) : View(ctx) {
     }
 
     /** STATS FOR NERDS turned off: the cards go until the next setStats(). */
-    fun hideStats() { statsAnim.cancel(); statsOn = false; for (i in 0 until 3) statShown[i] = 0f; invalidate() }
+    override fun hideStats() { statsAnim.cancel(); statsOn = false; for (i in 0 until 3) statShown[i] = 0f; invalidate() }
 
     /** New readings (0..1) for CPU, MEMORY, STORAGE. Rings sweep on a real change, otherwise one redraw. */
-    fun setStats(values: FloatArray, details: Array<String>) {
+    override fun setStats(values: FloatArray, details: Array<String>) {
         var jump = !statsOn
         for (i in 0 until 3) {
             statFrom[i] = statShown[i]; statTo[i] = values[i]; statDetail[i] = details[i]
@@ -257,7 +258,7 @@ class SeekerView(ctx: Context, private val host: Host) : View(ctx) {
     }
 
     /** Called when we come back to the front (or the launch never happened): clear the takeover. */
-    fun resetLaunch() {
+    override fun resetLaunch() {
         launchAnims.forEach { it.cancel() }
         launchAnims.clear()
         takeoverScale = 0f
@@ -270,12 +271,12 @@ class SeekerView(ctx: Context, private val host: Host) : View(ctx) {
     }
 
     /** Leaving the screen: close the item menu, drop out of reorder mode (saving the order). */
-    fun resetModes() {
+    override fun resetModes() {
         if (menuOpen) closeMenu(animate = false)
         if (reorder) setReorder(false)
     }
 
-    val isLaunching get() = busy
+    override val isLaunching get() = busy
 
     // ---------- wheel layout (mockup layout()) ----------
     private fun layoutWheel(animate: Boolean) {
@@ -341,7 +342,7 @@ class SeekerView(ctx: Context, private val host: Host) : View(ctx) {
     }
 
     // ---------- remote ----------
-    fun onKey(e: KeyEvent): Boolean {
+    override fun onKey(e: KeyEvent): Boolean {
         val code = e.keyCode
         val isCenter = code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER ||
             code == KeyEvent.KEYCODE_NUMPAD_ENTER || code == KeyEvent.KEYCODE_BUTTON_A

@@ -17,6 +17,8 @@ class AppEntry(
     val parts: List<Pair<String, Int>>? = null,
     val intent: Intent,
     val component: ComponentName? = null,
+    /** The app's own label, mixed case, for SLATE (name is upper case for the dot font). */
+    val title: String = name,
 ) {
     val dots: String = Dots.clean(name)
 }
@@ -82,9 +84,10 @@ object Apps {
             val entry = if (brand != null) {
                 AppEntry(pkg, brand.name, brand.color, brand.parts, intent, cn)
             } else {
-                val label = Dots.clean(ri.loadLabel(pm).toString()).ifEmpty { Dots.clean(pkg.substringAfterLast('.')) }
+                val raw = ri.loadLabel(pm).toString().trim()
+                val label = Dots.clean(raw).ifEmpty { Dots.clean(pkg.substringAfterLast('.')) }
                 val color = if (pkg == PLAY_STORE) SETTINGS_COLOR else colors.colorFor(pkg) { iconOf(ctx, cn) }
-                AppEntry(pkg, label, color, null, intent, cn)
+                AppEntry(pkg, label, color, null, intent, cn, raw.ifEmpty { label })
             }
             byPkg[pkg] = entry
         }

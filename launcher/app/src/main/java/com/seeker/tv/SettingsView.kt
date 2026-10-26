@@ -15,6 +15,7 @@ import android.provider.Settings
 import android.view.KeyEvent
 import android.view.View
 import android.view.animation.PathInterpolator
+import kotlin.math.max
 import kotlin.math.min
 
 /**
@@ -53,6 +54,7 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
         fun toggleSound()
         fun statsOn(): Boolean            // v5: CPU / MEMORY / STORAGE widgets on the wheel
         fun toggleStats()
+        fun backdrop(): Bitmap?           // SLATE: the photo on the home screen, behind its settings
     }
 
     private companion object {
@@ -67,6 +69,7 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
         const val TITLE_CELL = 12f
         const val LIST_TOP = 330f
         const val VALUE_X = 1100f
+        val HOMES = setOf("WHEEL", "SLATE")  // full home screens; the others are games with an APP LIST row
         val MAIN = listOf("SYSTEM SETTINGS", "INPUTS", "HOME MODE", "SOUND", "STATS FOR NERDS", "NAME", "WEATHER LOCATION", "HIDDEN APPS", "ABOUT")
         const val ROW_SP = 104f
         const val LAST_ROW = 1000f  // lowest row center
@@ -79,7 +82,8 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
     private var page = Page.MAIN
     private var mainSel = 0
     private var rows: List<String> = MAIN
-    private val game get() = host.homeMode() != "WHEEL"  // FLAP, INVADERS or HUNT
+    private val game get() = host.homeMode() !in HOMES  // FLAP, INVADERS, HUNT or PONG
+    private val slate get() = host.homeMode() == "SLATE"
     private val hunt get() = host.homeMode() == "HUNT"
     private var rainbowT = 0  // the mockup's frame counter t, for the strip's hue
 
@@ -130,6 +134,8 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
         page = Page.MAIN
         rows = mainRows()
         mainSel = 0
+        slatePage = null
+        slateFollow()
         invalidate()
     }
 
@@ -138,6 +144,8 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
         val at = rows.getOrNull(mainSel)
         rows = mainRows()
         mainSel = rows.indexOf(at).takeIf { it >= 0 } ?: 0
+        slatePage = null
+        slateFollow()
         invalidate()
     }
 
@@ -175,6 +183,7 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
             }
             Page.ABOUT -> if (code == KeyEvent.KEYCODE_BACK || isCenter) page = Page.MAIN
         }
+        if (slate) slateFollow()
         invalidate()
         return true
     }
@@ -228,6 +237,11 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
     override fun onDraw(canvas: Canvas) {
         canvas.save()
         canvas.scale(width / W, height / H)
+        if (slate) {
+            drawSlate(canvas)
+            canvas.restore()
+            return
+        }
         if (hunt) {
             drawHunt(canvas)
             canvas.restore()
@@ -406,5 +420,199 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
             mono.color = Pixel.PAPER
             c.drawText(kv.second, 860f, y + 17.5f + mono.textSize * 0.36f, mono)
         }
+    }
+
+    // ---------- SLATE style (design/seeker-slate-mockup-v1.html): tvOS grouped list over the home photo ----------
+    private class SRow(val label: String, val value: String? = null, val chevron: Boolean = false,
+                       val switch: Boolean? = null, val dim: Boolean = false)
+
+    private val slateGroups = listOf(
+        "General" to listOf("SYSTEM SETTINGS", "INPUTS"),
+        "Home" to listOf("HOME MODE", "SOUND", "STATS FOR NERDS"),
+        "You" to listOf("NAME", "WEATHER LOCATION"),
+        "Apps" to listOf("HIDDEN APPS", "ABOUT"),
+    )
+    private val slateLabels = mapOf(
+        "SYSTEM SETTINGS" to "System Settings", "INPUTS" to "Inputs", "HOME MODE" to "Home Mode", "SOUND" to "Sound",
+        "STATS FOR NERDS" to "Stats for Nerds", "NAME" to "Name", "WEATHER LOCATION" to "Weather Location",
+        "HIDDEN APPS" to "Hidden Apps", "ABOUT" to "About",
+    )
+    private val S_LEFT = 460f
+    private val S_RIGHT = 1460f
+    private val S_TOP = 230f        // list viewport, 230..1020 on screen
+    private val S_VIEW = 790f
+    private val S_ROW = 72f
+    private val S_HEAD = 62f
+    private var slateScroll = 0f
+    private var slateScrollAnim: ValueAnimator? = null
+    private var slatePage: Page? = null
+    private var slateFocus = -1
+    private var slateFocusT = 1f
+    private val slateSpring = PathInterpolator(.25f, 1.25f, .5f, 1f)
+    private val slateFocusAnim = ValueAnimator.ofFloat(0f, 1f).apply {
+        interpolator = null
+        addUpdateListener { slateFocusT = slateSpring.getInterpolation(it.animatedFraction); invalidate() }
+    }
+    private fun inter(weight: Int, size: Float) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = Inter.at(context, weight, size >= 40f)
+        textSize = size
+    }
+    private val sTitle = inter(700, 64f).apply { color = 0xFFF5F5F7.toInt(); letterSpacing = -0.01f }
+    private val sHead = inter(500, 20f).apply { color = 0xFF8E8E93.toInt(); letterSpacing = 0.06f }
+    private val sLabel = inter(500, 28f)
+    private val sValue = inter(400, 28f).apply { textAlign = Paint.Align.RIGHT }
+    private val sFill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val sPhoto = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val sSrc = android.graphics.Rect()
+    private val sDst = android.graphics.RectF()
+
+    private fun titleCase(s: String) = s.lowercase().split(' ').joinToString(" ") { w -> w.replaceFirstChar { it.titlecase() } }
+
+    /** The current page as (header, rows) groups, its title, and the focused row (flat index, -1 = none). */
+    private fun slateModel(): Triple<String, List<Pair<String?, List<SRow>>>, Int> = when (page) {
+        Page.MAIN -> {
+            val groups = slateGroups.map { (head, keys) ->
+                head to keys.filter { it in rows }.map { k ->
+                    when (k) {
+                        "HOME MODE" -> SRow(slateLabels.getValue(k), titleCase(host.homeMode()))
+                        "SOUND" -> SRow(slateLabels.getValue(k), switch = host.soundOn())
+                        "STATS FOR NERDS" -> SRow(slateLabels.getValue(k), switch = host.statsOn())
+                        "NAME" -> SRow(slateLabels.getValue(k), titleCase(host.name()))
+                        "WEATHER LOCATION" -> SRow(slateLabels.getValue(k), titleCase(host.weatherPlace()))
+                        "HIDDEN APPS" -> SRow(slateLabels.getValue(k), "${host.hiddenKeys().count { h -> host.allApps().any { it.key == h } }}", chevron = true)
+                        else -> SRow(slateLabels.getValue(k), chevron = true)
+                    }
+                }
+            }.filter { it.second.isNotEmpty() }
+            Triple("Settings", groups, mainSel)
+        }
+        Page.HIDDEN -> Triple(
+            "Hidden Apps",
+            listOf<Pair<String?, List<SRow>>>(null to apps.map { a ->
+                val h = a.key in hidden
+                SRow(a.title, if (h) "Hidden" else "Shown", dim = h)
+            }),
+            appSel,
+        )
+        Page.ABOUT -> Triple(
+            "About",
+            listOf<Pair<String?, List<SRow>>>(null to about.map { (k, v) -> SRow(titleCase(k), v) }),
+            -1,
+        )
+    }
+
+    /** Top of each row in list space (0 = top of the viewport, before scrolling). */
+    private fun slateRowTops(groups: List<Pair<String?, List<SRow>>>): FloatArray {
+        val out = ArrayList<Float>()
+        var y = 0f
+        for ((head, list) in groups) {
+            y += if (head != null) S_HEAD else 24f
+            for (i in list.indices) out += y + i * S_ROW
+            y += list.size * S_ROW
+        }
+        return out.toFloatArray()
+    }
+
+    /** Keep the focused row inside the viewport; spring the focus onto a newly focused row. */
+    private fun slateFollow() {
+        if (!slate) return
+        val (_, groups, focus) = slateModel()
+        if (slatePage != page) { slatePage = page; slateScrollAnim?.cancel(); slateScroll = 0f; slateFocus = -1 }
+        if (focus != slateFocus) {
+            slateFocus = focus
+            slateFocusAnim.cancel()
+            slateFocusAnim.duration = ms(250)
+            slateFocusAnim.start()
+        }
+        if (focus < 0) return
+        val top = slateRowTops(groups)[focus]
+        var target = slateScroll
+        if (top - target + S_ROW > S_VIEW - 20f) target = top + S_ROW - S_VIEW + 40f
+        if (top - target < 0f) target = max(0f, top - 60f)
+        if (target == slateScroll) return
+        slateScrollAnim?.cancel()
+        val from = slateScroll
+        slateScrollAnim = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = ms(350)
+            interpolator = ease
+            addUpdateListener { slateScroll = from + (target - from) * it.animatedValue as Float; invalidate() }
+            start()
+        }
+    }
+
+    private fun drawSlate(c: Canvas) {
+        // the home screen's photo under a dark veil
+        val bmp = host.backdrop()
+        if (bmp != null) {
+            val bw = bmp.width; val bh = bmp.height
+            if (bw * 9 > bh * 16) { val w = bh * 16 / 9; sSrc.set((bw - w) / 2, 0, (bw + w) / 2, bh) }
+            else { val h = bw * 9 / 16; sSrc.set(0, (bh - h) / 2, bw, (bh + h) / 2) }
+            sDst.set(0f, 0f, W, H)
+            c.drawBitmap(bmp, sSrc, sDst, sPhoto)
+            sFill.color = 0xDB0A0A0C.toInt()  // #0A0A0C at 86%
+        } else {
+            sFill.color = 0xFF0A0A0C.toInt()
+        }
+        c.drawRect(0f, 0f, W, H, sFill)
+
+        val (title, groups, focus) = slateModel()
+        c.drawText(title, S_LEFT, 160f, sTitle)
+        c.save()
+        c.clipRect(0f, S_TOP, W, S_TOP + S_VIEW)
+        c.translate(0f, S_TOP - slateScroll)
+        val tops = slateRowTops(groups)
+        var flat = 0
+        var y = 0f
+        for ((head, list) in groups) {
+            if (head != null) { c.drawText(head.uppercase(), S_LEFT + 32f, y + 45f, sHead); y += S_HEAD } else y += 24f
+            sFill.color = 0xFF1C1C1E.toInt()
+            c.drawRoundRect(S_LEFT, y, S_RIGHT, y + list.size * S_ROW, 22f, 22f, sFill)
+            for ((i, row) in list.withIndex()) {
+                val top = tops[flat]
+                val focused = flat == focus
+                // separators between rows, hidden next to the focused row
+                if (i > 0 && !focused && flat - 1 != focus) {
+                    sFill.color = 0xFF38383A.toInt()
+                    c.drawRect(S_LEFT + 32f, top, S_RIGHT, top + 1f, sFill)
+                }
+                slateRow(c, row, top, focused)
+                flat++
+            }
+            y += list.size * S_ROW
+        }
+        c.restore()
+    }
+
+    private fun slateRow(c: Canvas, row: SRow, top: Float, focused: Boolean) {
+        c.save()
+        val mid = top + S_ROW / 2
+        if (focused) {
+            val s = 1f + 0.03f * slateFocusT
+            c.scale(s, s, (S_LEFT + S_RIGHT) / 2, mid)
+            sFill.color = 0xFFF5F5F7.toInt()
+            c.drawRoundRect(S_LEFT, top, S_RIGHT, top + S_ROW, 22f, 22f, sFill)
+        }
+        sLabel.color = when {
+            focused -> 0xFF0A0A0C.toInt()
+            row.dim -> 0xFF8E8E93.toInt()
+            else -> 0xFFF5F5F7.toInt()
+        }
+        c.drawText(row.label, S_LEFT + 32f, mid + 10f, sLabel)
+        var right = S_RIGHT - 32f
+        sValue.color = if (focused) 0xFF3A3A3C.toInt() else 0xFF8E8E93.toInt()
+        if (row.chevron) {
+            c.drawText("›", right, mid + 10f, sValue)
+            right -= sValue.measureText("›") + 14f
+        }
+        row.value?.let { c.drawText(it, right, mid + 10f, sValue) }
+        row.switch?.let { on ->
+            // iOS switch, 52x32
+            val l = right - 52f
+            sFill.color = if (on) 0xFF30D158.toInt() else 0xFF39393D.toInt()
+            c.drawRoundRect(l, mid - 16f, right, mid + 16f, 16f, 16f, sFill)
+            sFill.color = 0xFFFFFFFF.toInt()
+            c.drawCircle(if (on) right - 16f else l + 16f, mid, 14f, sFill)
+        }
+        c.restore()
     }
 }
