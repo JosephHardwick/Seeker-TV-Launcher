@@ -38,3 +38,6 @@ On the TV: same PCM-at-startup + SoundPool approach as Invaders. SOUND setting a
 - **Dog pop-up.** On every shot the dog rises out of the grass at center: 20 frames up, 60 frames hold with a small bob, 20 frames down; drawn clipped to the ground line with the grass tufts redrawn in front. Miss: POP_MISS (grinning, teeth) with the yip at frame 20. Hit: POP_HIT with his arm up to the right and the duck dangling from his paw in its brand color, hit jingle at frame 20. After he sinks on a hit, the takeover runs and the app launches at 900 ms. START shows him peeking out of the grass.
 - **Odds.** Tap OK: 25% hit, 75% miss. Hold OK for 600 ms: guaranteed miss (shot fires at the 600 ms mark). New shots are blocked while the dog is up or the flash is on.
 - Sprites: POP_MISS and POP_HIT (24x18, cell 8), GUN (20x6, cell 6), DOGPAL and GUNPAL in the mockup. The walking hound from v3 is gone.
+
+## v5 change (owner, 2026-10-25): hold = hit
+- **Odds.** Tap OK: 25% hit, 75% miss (unchanged). Hold OK for 600 ms: **guaranteed hit** (was a guaranteed miss in v4); the shot still fires at the 600 ms mark. So a tap is the gamble and a hold is the sure pick. Mockup v4 updated in place (shoot(forceHit)).

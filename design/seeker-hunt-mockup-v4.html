@@ -32,7 +32,7 @@ button.on { color: var(--paper); border-color: var(--paper); }
     <button id="focus">Click here, then Enter to start · ← → lock the next bird · Enter = shoot</button>
     <button id="mute" class="on">Sound on</button>
   </div>
-  <p class="note">Playable mockup at 1920x1080, 8-bit style (square pixels, flat palette). Enter is the remote's OK button. The sight locks onto a bird on its own; ← → jump to the next bird left or right and the shotgun at the bottom swings to follow. Tap Enter to shoot: one in four hits. Hold Enter: a guaranteed miss. The dog pops up out of the grass to grin at a miss or hold up your duck on a hit, then the service "opens". The dog, ducks, scene and sounds are our own designs in the era's style.</p>
+  <p class="note">Playable mockup at 1920x1080, 8-bit style (square pixels, flat palette). Enter is the remote's OK button. The sight locks onto a bird on its own; ← → jump to the next bird left or right and the shotgun at the bottom swings to follow. Tap Enter to shoot: one in four hits. Hold Enter: a guaranteed hit. The dog pops up out of the grass to grin at a miss or hold up your duck on a hit, then the service "opens". The dog, ducks, scene and sounds are our own designs in the era's style.</p>
 </div>
 
 <script>
@@ -208,9 +208,9 @@ button.on { color: var(--paper); border-color: var(--paper); }
   makeBirds(); requestAnimationFrame(step);
 
   // tap OK: 25% hit. Hold OK (600 ms): guaranteed miss. The dog pops up either way; on a hit the takeover runs after he sinks.
-  function shoot(forceMiss){
+  function shoot(forceHit){
     if (pop) return; shots++; flash = 6; SFX.shot(); var b = birds[target];
-    if (forceMiss || Math.random() >= HIT_RATE){ missT = 70; missAt = {x: b.x, y: b.y}; b.flee = 60; setTimeout(SFX.miss, 120); pop = {kind: 'miss', t: 0, app: b.app}; return; }
+    if (!forceHit && Math.random() >= HIT_RATE){ missT = 70; missAt = {x: b.x, y: b.y}; b.flee = 60; setTimeout(SFX.miss, 120); pop = {kind: 'miss', t: 0, app: b.app}; return; }
     b.fall = 1; hit = {app: b.app, i: target, x: b.x, y: b.y}; pop = {kind: 'hit', t: 0, app: b.app};
   }
   var holdTimer = null, held = false, armed = false;
