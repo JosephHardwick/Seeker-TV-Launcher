@@ -27,6 +27,8 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
     companion object {
         private const val TAG = "SeekerTV"
         private const val MAX_CRASHES = 2
+        private const val STATS_MS = 2000L
+        private const val STORAGE_EVERY = 15  // x STATS_MS = 30 s
         private val ANIM_KEYS = arrayOf("window_animation_scale", "transition_animation_scale", "animator_duration_scale")
         const val DEFAULT_NAME = "SEEKER"
         const val MAX_NAME = 12
@@ -55,6 +57,26 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
         override fun run() {
             weather?.fetch { view?.setWeather(it) }
             main.postDelayed(this, Weather.REFRESH_MS)
+        }
+    }
+
+    /** v5 widgets (STATS FOR NERDS): CPU and MEMORY every 2 s, STORAGE every 30 s, only while the wheel is the screen shown. */
+    private var stats: SysStats? = null
+    private var statsTicks = 0
+    private var storage: SysStats.Reading? = null
+    private val statsTick = object : Runnable {
+        override fun run() {
+            if (!statsOn()) return  // STATS FOR NERDS turned off: stop rescheduling
+            val v = view
+            val s = stats
+            if (v != null && s != null && shown === v) {
+                val cpu = s.cpu()
+                val mem = s.memory()
+                val disk = storage?.takeIf { statsTicks % STORAGE_EVERY != 0 } ?: s.storage().also { storage = it }
+                statsTicks++
+                v.setStats(floatArrayOf(cpu.value, mem.value, disk.value), arrayOf(cpu.detail, mem.detail, disk.detail))
+            }
+            main.postDelayed(this, STATS_MS)
         }
     }
 
@@ -98,6 +120,7 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
             view = v
             v.setGreeting(greetingText())
             weather = Weather(this).also { v.setWeather(it.cached()) }
+            stats = SysStats(this)
             allApps = Apps.load(this)
             v.setApps(Apps.wheel(allApps, prefs))
             showHome()
@@ -128,6 +151,8 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
         view?.tick()
         main.removeCallbacks(weatherTick)
         if (Milestone.M2) if (weather?.isStale() != false) main.post(weatherTick) else main.postDelayed(weatherTick, Weather.REFRESH_MS)
+        main.removeCallbacks(statsTick)
+        startStats()
     }
 
     override fun onResume() {
@@ -147,6 +172,7 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
         if (view != null) {
             unregisterReceiver(timeReceiver)
             main.removeCallbacks(weatherTick)
+            main.removeCallbacks(statsTick)
             view?.resetLaunch()  // come back to a clean wheel
             view?.resetModes()
             gamesToStart()       // the games: HOME always shows START, never mid-game
@@ -281,6 +307,24 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
         prefs.edit().putBoolean("sound", on).apply()
         Sfx.enabled = on
         Log.i(TAG, "SOUND = ${if (on) "ON" else "OFF"}")
+    }
+
+    override fun statsOn(): Boolean = prefs.getBoolean("stats", false)  // v5, off by default
+
+    override fun toggleStats() {
+        val on = !statsOn()
+        prefs.edit().putBoolean("stats", on).apply()
+        main.removeCallbacks(statsTick)
+        if (on) startStats() else view?.hideStats()
+        Log.i(TAG, "STATS FOR NERDS = ${if (on) "ON" else "OFF"}")
+    }
+
+    /** Prime the idle counters so the first reading is a real 1 s sample. Nothing is sampled while STATS is OFF. */
+    private fun startStats() {
+        if (!statsOn()) return
+        statsTicks = 0
+        stats?.cpu()
+        main.postDelayed(statsTick, 1000)
     }
 
     override fun openAppList() {
