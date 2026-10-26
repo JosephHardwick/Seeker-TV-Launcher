@@ -24,10 +24,10 @@ class NotifyService : Service() {
     companion object {
         private const val TAG = "SeekerTV"
         const val ACTION = "com.seeker.tv.NOTIFY"
-        /** `am broadcast -a com.seeker.tv.MODE --es mode wheel|flap|invaders|hunt`: stores HOME MODE. */
+        /** `am broadcast -a com.seeker.tv.MODE --es mode wheel|slate|flap|invaders|hunt|pong`: stores HOME MODE. */
         const val ACTION_MODE = "com.seeker.tv.MODE"
-        /** WHEEL plus the game modes compiled into this flavor. */
-        val MODES = listOf("WHEEL") + BuiltModes.GAMES.map { it.name }
+        /** The two home screens (WHEEL, SLATE: in every flavor) plus the game modes compiled into this flavor. */
+        val MODES = listOf("WHEEL", "SLATE") + BuiltModes.GAMES.map { it.name }
         /**
          * `am broadcast -a com.seeker.tv.HOME_ALIAS --ez enabled true|false`: turns the `.Home` alias on/off.
          * Shell may not change component state on this TV (`pm enable` → SecurityException); the app may.

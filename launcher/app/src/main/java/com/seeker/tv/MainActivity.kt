@@ -42,6 +42,9 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
 
     private lateinit var prefs: SharedPreferences
     private var view: SeekerView? = null
+    /** HOME MODE SLATE's screen, built the first time it's shown. */
+    private var slate: SlateView? = null
+    private var backdrop: Backdrop? = null
     private var settings: SettingsView? = null
     /** Game screens built so far, by HOME MODE name. Only the flavor's BuiltModes can appear here. */
     private val games = HashMap<String, GameScreen>()
@@ -55,21 +58,24 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
 
     private val weatherTick = object : Runnable {
         override fun run() {
-            weather?.fetch { view?.setWeather(it) }
+            weather?.fetch { w -> homes().forEach { it.setWeather(w) } }
             main.postDelayed(this, Weather.REFRESH_MS)
         }
     }
 
-    /** v5 widgets (STATS FOR NERDS): CPU and MEMORY every 2 s, STORAGE every 30 s, only while the wheel is the screen shown. */
+    /** The home screens built so far (the wheel always, SLATE once shown): every update goes to both. */
+    private fun homes(): List<HomeScreen> = listOfNotNull(view, slate)
+
+    /** v5 widgets (STATS FOR NERDS): CPU and MEMORY every 2 s, STORAGE every 30 s, only while a home screen is shown. */
     private var stats: SysStats? = null
     private var statsTicks = 0
     private var storage: SysStats.Reading? = null
     private val statsTick = object : Runnable {
         override fun run() {
             if (!statsOn()) return  // STATS FOR NERDS turned off: stop rescheduling
-            val v = view
+            val v = shown as? HomeScreen
             val s = stats
-            if (v != null && s != null && shown === v) {
+            if (v != null && s != null) {
                 val cpu = s.cpu()
                 val mem = s.memory()
                 val disk = storage?.takeIf { statsTicks % STORAGE_EVERY != 0 } ?: s.storage().also { storage = it }
@@ -81,7 +87,7 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
     }
 
     private val timeReceiver = object : BroadcastReceiver() {
-        override fun onReceive(c: Context, i: Intent) { view?.tick() }
+        override fun onReceive(c: Context, i: Intent) { homes().forEach { it.tick() } }
     }
 
     private val packageReceiver = object : BroadcastReceiver() {
@@ -96,7 +102,7 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
         main.post {
             val s = settings
             if (s != null && shown === s) s.modeChanged()
-            else if (view?.isLaunching != true) { wheelVisit = false; showHome() }
+            else if (homes().none { it.isLaunching }) { wheelVisit = false; showHome() }
         }
     }
 
@@ -148,11 +154,12 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
             addAction(Intent.ACTION_TIME_CHANGED)
             addAction(Intent.ACTION_TIMEZONE_CHANGED)
         })
-        view?.tick()
+        homes().forEach { it.tick() }
         main.removeCallbacks(weatherTick)
         if (Milestone.M2) if (weather?.isStale() != false) main.post(weatherTick) else main.postDelayed(weatherTick, Weather.REFRESH_MS)
         main.removeCallbacks(statsTick)
         startStats()
+        refreshPhotos()
     }
 
     override fun onResume() {
@@ -173,8 +180,7 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
             unregisterReceiver(timeReceiver)
             main.removeCallbacks(weatherTick)
             main.removeCallbacks(statsTick)
-            view?.resetLaunch()  // come back to a clean wheel
-            view?.resetModes()
+            homes().forEach { it.resetLaunch(); it.resetModes() }  // come back to a clean home screen
             gamesToStart()       // the games: HOME always shows START, never mid-game
             if (wheelVisit) { wheelVisit = false; if (shown === view) showHome() }
         }
@@ -204,7 +210,8 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
         val handled = when (val cur = shown) {
             is SettingsView -> cur.onKey(event)
             is GameScreen -> cur.onKey(event)
-            else -> view?.onKey(event) == true
+            is HomeScreen -> cur.onKey(event)
+            else -> false
         }
         return handled || super.dispatchKeyEvent(event)
     }
@@ -216,10 +223,10 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
             val opts = ActivityOptions.makeCustomAnimation(this, android.R.anim.fade_in, 0)
             startActivity(intent, opts.toBundle())
             // If nothing came up in front of us, don't leave the color screen hanging.
-            main.postDelayed({ if (resumed) { view?.resetLaunch(); gamesToStart() } }, 4000)
+            main.postDelayed({ if (resumed) { homes().forEach { it.resetLaunch() }; gamesToStart() } }, 4000)
         } catch (e: Exception) {
             Log.e(TAG, "launch failed: ${entry.key}", e)
-            view?.resetLaunch()
+            homes().forEach { it.resetLaunch() }
             gamesToStart()
         }
     }
@@ -267,7 +274,8 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
 
     override fun toggleHidden(entry: AppEntry) {
         Apps.setHidden(prefs, entry.key, entry.key !in Apps.hidden(prefs))
-        view?.setApps(Apps.wheel(allApps, prefs))
+        val list = Apps.wheel(allApps, prefs)
+        homes().forEach { it.showApps(list) }
     }
 
     override fun about(): List<Pair<String, String>> {
@@ -315,7 +323,7 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
         val on = !statsOn()
         prefs.edit().putBoolean("stats", on).apply()
         main.removeCallbacks(statsTick)
-        if (on) startStats() else view?.hideStats()
+        if (on) startStats() else homes().forEach { it.hideStats() }
         Log.i(TAG, "STATS FOR NERDS = ${if (on) "ON" else "OFF"}")
     }
 
@@ -326,6 +334,8 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
         stats?.cpu()
         main.postDelayed(statsTick, 1000)
     }
+
+    override fun backdrop(): android.graphics.Bitmap? = slate?.currentPhoto
 
     override fun openAppList() {
         val v = view ?: return
@@ -362,6 +372,7 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
         val v = view ?: return
         when (if (wheelVisit) "WHEEL" else homeMode()) {
             "WHEEL" -> show(v)
+            "SLATE" -> show(slate ?: buildSlate())
             else -> {
                 val mode = homeMode()
                 val g = games[mode] ?: BuiltModes.GAMES.firstOrNull { it.name == mode }?.create?.invoke(this, this)
@@ -375,6 +386,23 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
     }
 
     private fun gamesToStart() = games.values.forEach { it.toStart() }
+
+    /** SLATE's screen, fed the same apps, weather and stats as the wheel. */
+    private fun buildSlate(): SlateView {
+        val b = backdrop ?: Backdrop(this).also { backdrop = it }
+        val s = SlateView(this, this, b) { weatherPlace() }
+        slate = s
+        s.showApps(Apps.wheel(allApps, prefs))
+        weather?.let { s.setWeather(it.cached()) }
+        refreshPhotos()
+        return s
+    }
+
+    /** Once a day, only while SLATE is the home mode (the other modes never touch the network for it). */
+    private fun refreshPhotos() {
+        val b = backdrop ?: return
+        if (homeMode() == "SLATE" && b.isStale()) b.refresh { slate?.photosChanged() }
+    }
 
     private fun show(target: android.view.View) {
         if (shown !== target) {
@@ -398,7 +426,8 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
         val v = view ?: return
         try {
             allApps = Apps.load(this)
-            v.setApps(Apps.wheel(allApps, prefs))
+            val list = Apps.wheel(allApps, prefs)
+            homes().forEach { it.showApps(list) }
             games.values.forEach { it.refreshApps() }
         } catch (e: Exception) {
             Log.e(TAG, "app reload failed", e)
@@ -410,8 +439,8 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
     /** New WEATHER LOCATION: show the placeholder until the new reading arrives. */
     private fun refetchWeather() {
         val w = weather ?: return
-        view?.setWeather(w.cached())
-        w.fetch { view?.setWeather(it) }
+        homes().forEach { it.setWeather(w.cached()) }
+        w.fetch { now -> homes().forEach { it.setWeather(now) } }
     }
 
     /** One line of text from the TV's on-screen keyboard. [done] runs only on OK. */

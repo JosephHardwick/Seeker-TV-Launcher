@@ -1,6 +1,6 @@
 # Seeker TV
 
-A small, fast home screen for Google TV, drawn entirely on a canvas: a dot-matrix app wheel, plus four optional arcade "home modes" where you pick an app by playing a few seconds of a game. It replaces Google TV's own launcher, which frees a few hundred MB of RAM on low-memory TVs.
+A small, fast home screen for Google TV, drawn entirely on a canvas: a dot-matrix app wheel, an Apple-style home screen (SLATE), plus four optional arcade "home modes" where you pick an app by playing a few seconds of a game. It replaces Google TV's own launcher, which frees a few hundred MB of RAM on low-memory TVs.
 
 Built and tested on one TV: a Hisense 55A53FUA (Google TV, Android 11, 2 GB RAM). It should work on other Google TV / Android TV 11+ devices, but nothing else has been tried.
 
@@ -8,17 +8,18 @@ Built and tested on one TV: a Hisense 55A53FUA (Google TV, Android 11, 2 GB RAM)
 
 ## The modes
 
-Every build has the wheel. The game modes are optional (see [Flavors](#flavors)). Switch modes in Seeker's settings: **HOME MODE**.
+Every build has the wheel and SLATE. The game modes are optional (see [Flavors](#flavors)). Switch modes in Seeker's settings: **HOME MODE**.
 
 | | |
 |---|---|
 | **WHEEL**. Your apps as a dot-matrix wheel in each service's color. Up/Down spins, OK opens, hold OK to move or hide an app. Greeting, clock, date and weather on the right. | ![Wheel](docs/screens/wheel.png) |
+| **SLATE**. A clean, Apple-style home screen: a rotating nature/city photo, a large translucent clock with the date and weather centered on top, and your apps' own banner art in rounded tiles. Left/Right moves along the row, OK opens, hold OK to move or hide an app; Down reaches settings (an Apple TV-style grouped list). Photos are Bing's image of the day (no key), refreshed daily and kept on the TV for offline use; Google TV's own Ambient photos aren't readable by other apps. | |
 | **FLAP**. A flappy-bird run through tubes in each service's color. Fly through a tube to open that app. A rainbow strip along the top edge doubles as bias-light input. | ![Flap](docs/screens/flap.png) |
 | **INVADERS**. Your apps are the invaders. Shoot one to open it; the meteor is Settings. | ![Invaders](docs/screens/invaders.png) |
 | **HUNT**. An 8-bit duck hunt: each duck is an app. Left/Right picks a duck, tap OK to shoot (1 in 4 hits), hold OK for a guaranteed hit. The dog pops up to react. | ![Hunt](docs/screens/hunt.png) |
 | **PONG**. Pong against a CPU that never misses. The right edge is a beam of light in one service's brand color; every return moves it to the next service. Miss the ball and that service opens (SETTINGS is in the cycle too). Hold Up/Down to move. | |
 
-Settings (gear on the wheel, SETTINGS on each game's start screen): SYSTEM SETTINGS, INPUTS, HOME MODE, SOUND, **NAME** (the greeting is HELLO &lt;NAME&gt;, default SEEKER), **WEATHER LOCATION** (any city, default Denver), HIDDEN APPS, ABOUT.
+Settings (gear on the wheel and SLATE, SETTINGS on each game's start screen): SYSTEM SETTINGS, INPUTS, HOME MODE, SOUND, **NAME** (the greeting is HELLO &lt;NAME&gt;, default SEEKER), **WEATHER LOCATION** (any city, default Denver), HIDDEN APPS, ABOUT.
 
 ## Flavors
 
@@ -26,12 +27,12 @@ One APK per flavor, all with the same app id (`com.seeker.tv`), so installing on
 
 | APK | Modes |
 |---|---|
-| `seeker-wheel-<version>.apk` | WHEEL only (smallest; HOME MODE is hidden) |
-| `seeker-flap-<version>.apk` | WHEEL + FLAP |
-| `seeker-invaders-<version>.apk` | WHEEL + INVADERS |
-| `seeker-hunt-<version>.apk` | WHEEL + HUNT |
-| `seeker-pong-<version>.apk` | WHEEL + PONG |
-| `seeker-all-<version>.apk` | all five |
+| `seeker-wheel-<version>.apk` | WHEEL + SLATE (smallest) |
+| `seeker-flap-<version>.apk` | WHEEL + SLATE + FLAP |
+| `seeker-invaders-<version>.apk` | WHEEL + SLATE + INVADERS |
+| `seeker-hunt-<version>.apk` | WHEEL + SLATE + HUNT |
+| `seeker-pong-<version>.apk` | WHEEL + SLATE + PONG |
+| `seeker-all-<version>.apk` | all six |
 
 Download them from [Releases](../../releases).
 
@@ -41,7 +42,7 @@ Download them from [Releases](../../releases).
 - **Why launcherx and setupwraith get disabled.** Google TV's launcher (`com.google.android.apps.tv.launcherx`) takes HOME back whenever it's enabled. Its guard, `com.google.android.tungsten.setupwraith`, has a `RecoveryActivity` that re-enables launcherx; with launcherx disabled and the guard on, it takes HOME itself and loops (a new activity every ~80 ms). Android's shell can't disable a single component on these TVs, so the whole setupwraith package is disabled, **first**, then launcherx. Side effect: Google TV setup flows (add account, re-run setup) may not work until you re-enable them; `panic-home.sh` does that.
 - **Why Hisense's `customerlauncher` is not a fallback.** It sounds like a launcher, but on this build it has no HOME intent filter (only a helper activity). If Seeker can't start, Android falls back to `com.android.tv.settings/.system.FallbackHome`, not to customerlauncher. Seeker has its own safety net: after two crashes in a row it shows a plain app list with "Retry Seeker TV" and "Settings".
 - **The HOME switch.** Seeker ships its HOME entry (`.Home`) disabled, because an enabled HOME candidate can make Android drop your current preferred HOME. Seeker turns it on itself when it receives `com.seeker.tv.HOME_ALIAS`, then `cmd package set-home-activity` makes it HOME.
-- **RAM.** On the reference TV, launcherx plus its `coreservices` process used about 305 MB RSS. Seeker uses about 26 MB PSS on the wheel and 35 to 47 MB PSS while a game is being played. Free RAM two minutes after boot went from 91 MB (stock) to 163 MB with Seeker as HOME. (Android quickly fills freed RAM with cached apps, so treat these as rough.)
+- **RAM.** On the reference TV, launcherx plus its `coreservices` process used about 305 MB RSS. Seeker uses about 26 MB PSS on the wheel and 35 to 47 MB PSS while a game is being played. SLATE uses more, about 96 MB PSS on an onn 4K Pro, mostly its two full-screen photos and the tile art. Free RAM two minutes after boot went from 91 MB (stock) to 163 MB with Seeker as HOME. (Android quickly fills freed RAM with cached apps, so treat these as rough.)
 - **Weather** comes from [Open-Meteo](https://open-meteo.com) (no API key). The city you type is looked up with Open-Meteo's geocoder; only the coordinates are stored, on the TV.
 - **Optional permissions**, both granted over adb: `WRITE_SECURE_SETTINGS` lets Seeker keep animations at 0.5x (snappier), and the `SYSTEM_ALERT_WINDOW` app-op lets `com.seeker.tv.NOTIFY` broadcasts show as toasts over other apps.
 
@@ -100,7 +101,7 @@ Updating later: `adb install -r` the new APK. HOME stays on Seeker.
 ```
 cd launcher
 ./gradlew assembleAllDebug                 # or assembleWheelDebug, assembleHuntDebug, ...
-./gradlew assembleRelease                  # all five, unsigned unless the signing env vars are set
+./gradlew assembleRelease                  # all six modes, unsigned unless the signing env vars are set
 ```
 
 Release signing reads `SEEKER_KEYSTORE`, `SEEKER_KEYSTORE_PASSWORD`, `SEEKER_KEY_ALIAS` and `SEEKER_KEY_PASSWORD` from the environment. APKs land in `launcher/app/build/outputs/apk/<flavor>/release/seeker-<flavor>-<version>.apk`.
