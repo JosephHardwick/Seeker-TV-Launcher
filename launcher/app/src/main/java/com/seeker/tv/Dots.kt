@@ -76,7 +76,8 @@ object Dots {
         src.split(' ').map { row -> BooleanArray(row.length) { row[it] == '1' } }.toTypedArray()
 
     private val FONT: Map<Char, Array<BooleanArray>> = FONT_SRC.mapValues { parse(it.value) }
-    private val ICONS: Map<String, Array<BooleanArray>> = ICON_SRC.mapValues { parse(it.value) }
+    /** 9x9 icons (weather, gear, bell) as rows of lit pixels; POCKET draws them as plain pixels. */
+    val ICONS: Map<String, Array<BooleanArray>> = ICON_SRC.mapValues { parse(it.value) }
     private val BLANK = FONT.getValue(' ')
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }

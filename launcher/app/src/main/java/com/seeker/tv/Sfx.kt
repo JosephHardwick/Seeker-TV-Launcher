@@ -40,6 +40,8 @@ object Sfx {
         PONG_PADDLE, PONG_CPU, PONG_WALL, PONG_CYCLE,
         // SLATE (design/SLATE-SPEC.md): quiet sine ticks
         SLATE_TICK, SLATE_OK, SLATE_MENU,
+        // POCKET (design/POCKET-SPEC.md): short square-wave blips
+        POCKET_MOVE, POCKET_EDGE, POCKET_OK, POCKET_MENU,
     }
 
     @Volatile var enabled = true
@@ -110,6 +112,10 @@ object Sfx {
         Id.SLATE_TICK -> tone(Wave.SINE, 1600f, 1600f, 0.014f, 0.035f)
         Id.SLATE_OK -> tone(Wave.SINE, 880f, 1320f, 0.06f, 0.05f)
         Id.SLATE_MENU -> tone(Wave.SINE, 660f, 660f, 0.04f, 0.04f)
+        Id.POCKET_MOVE -> tone(Wave.SQUARE, 1760f, 1760f, 0.022f, 0.03f)
+        Id.POCKET_EDGE -> tone(Wave.SQUARE, 220f, 200f, 0.05f, 0.04f)
+        Id.POCKET_OK -> mix(tone(Wave.SQUARE, 988f, 988f, 0.06f, 0.04f), at(0.06f, tone(Wave.SQUARE, 1319f, 1319f, 0.12f, 0.04f)))
+        Id.POCKET_MENU -> tone(Wave.SQUARE, 1175f, 1175f, 0.04f, 0.035f)
     }
 
     private const val POP_UP = 20f / 60  // the dog's frame 20, when the mockup plays the yip / hit jingle
