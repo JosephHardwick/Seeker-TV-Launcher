@@ -85,7 +85,7 @@ class SlateView(
         val W_COLORS = intArrayOf(0xFF30D158.toInt(), 0xFF0A84FF.toInt(), 0xFFFF9F0A.toInt())
         // timings
         const val LONG_PRESS_MS = 600L
-        const val LAUNCH_AT_MS = 900L               // same as the wheel: the name shows before the app covers it
+        const val LAUNCH_AT_MS = 450L               // once the screen is dark; the app fades in over it
         const val PHOTO_MS = 30_000L
         val CONDITIONS = mapOf("sun" to "Sunny", "cloud" to "Cloudy", "rain" to "Rain", "snow" to "Snow", "storm" to "Thunderstorms")
 
@@ -98,7 +98,6 @@ class SlateView(
     // css easings from the mockup
     private val spring = PathInterpolator(.25f, 1.25f, .5f, 1f)
     private val ease = PathInterpolator(.2f, .7f, .2f, 1f)
-    private val takeoverEase = PathInterpolator(.3f, 0f, .1f, 1f)
     private val easeInOut = PathInterpolator(.42f, 0f, .58f, 1f)
 
     /** Undo animator_duration_scale (0.5 on these TVs) so 300 ms means 300 ms, as in SeekerView. */
@@ -155,11 +154,10 @@ class SlateView(
     private var shrinkKey: String? = null
     private var shrink = 1f
 
-    // launch: the focused tile grows to the full screen
+    // launch: the tile presses in, then the screen fades to black (banners are only ~320x180, too small to blow up)
     private var launching: AppEntry? = null
-    private var grow = 0f
-    private var flat = 0f
-    private val growFrom = RectF()
+    private var press = 1f
+    private var dark = 0f
     private var launchAnims = ArrayList<ValueAnimator>()
 
     // photos
@@ -223,8 +221,6 @@ class SlateView(
     private val cardLabel = text(600, 18f).apply { color = 0xFF8E8E93.toInt(); letterSpacing = 0.06f }
     private val cardValue = text(600, 34f, display = false).apply { color = TEXT }
     private val cardDetail = text(400, 20f).apply { color = 0xFF8E8E93.toInt(); textAlign = Paint.Align.RIGHT }
-    private val launchName = text(600, 96f).apply { textAlign = Paint.Align.CENTER; letterSpacing = -0.02f }
-    private val launchSub = text(400, 24f).apply { textAlign = Paint.Align.CENTER }
 
     /** Tile art per app key, baked once at the focused size: banner (or icon on the brand color), rounded. */
     private val art = HashMap<String, Bitmap>()
@@ -278,8 +274,8 @@ class SlateView(
         launchAnims.forEach { it.cancel() }
         launchAnims.clear()
         launching = null
-        grow = 0f
-        flat = 0f
+        press = 1f
+        dark = 0f
         busy = false
         centerDown = false
         removeCallbacks(longPress)
@@ -497,30 +493,29 @@ class SlateView(
         }
     }
 
-    // ---------- launch: the tile grows to fill the screen ----------
+    // ---------- launch: the tile presses in, the screen fades to black, the app fades in ----------
     private fun go() {
         if (busy) return
         val entry = apps.getOrNull(sel) ?: return
         busy = true
         Sfx.play(Sfx.Id.SLATE_OK)
         launching = entry
-        val cx = tileCx(sel)
-        growFrom.set(cx - TILE_W * FOCUS_S / 2, ROW_CY - TILE_H * FOCUS_S / 2, cx + TILE_W * FOCUS_S / 2, ROW_CY + TILE_H * FOCUS_S / 2)
         launchAnims.forEach { it.cancel() }
         launchAnims.clear()
         launchAnims += ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = ms(520)
-            interpolator = takeoverEase
-            addUpdateListener { grow = it.animatedValue as Float; invalidate() }
+            // a button press: down to 94% and back, 220 ms
+            duration = ms(220)
+            interpolator = null
+            addUpdateListener { press = 1f - .06f * Math.sin(Math.PI * it.animatedFraction).toFloat(); invalidate() }
         }
         launchAnims += ValueAnimator.ofFloat(0f, 1f).apply {
-            startDelay = ms(300)
-            duration = ms(300)
+            startDelay = ms(120)
+            duration = ms(330)
             interpolator = ease
-            addUpdateListener { flat = it.animatedValue as Float; invalidate() }
+            addUpdateListener { dark = it.animatedValue as Float; invalidate() }
         }
         launchAnims.forEach { it.start() }
-        postDelayed({ if (busy) host.launch(entry) }, LAUNCH_AT_MS)  // the app comes up behind the color
+        postDelayed({ if (busy) host.launch(entry) }, LAUNCH_AT_MS)
     }
 
     // ---------- photos ----------
@@ -696,7 +691,7 @@ class SlateView(
         // the name under the focused tile
         val app = apps.getOrNull(sel) ?: return
         val a = nameAlpha * (1f - gear) * (1f - menuT) * (if (moving) 0f else 1f)
-        if (a > 0.01f && launching == null) {
+        if (a > 0.01f) {
             namePaint.alpha = (255 * a).toInt()
             c.drawText(app.title, tileCx(sel), ROW_CY + TILE_H * FOCUS_S / 2 + 56f, namePaint)
             namePaint.alpha = 255
@@ -706,7 +701,7 @@ class SlateView(
     private fun drawTile(c: Canvas, i: Int) {
         val app = apps[i]
         val f = focus[i]
-        val s = (1 + (FOCUS_S - 1) * f) * (if (app.key == shrinkKey) shrink else 1f)
+        val s = (1 + (FOCUS_S - 1) * f) * (if (app.key == shrinkKey) shrink else 1f) * (if (i == sel && launching != null) press else 1f)
         if (s <= 0.01f) return
         val cx = tileCx(i)
         val w = TILE_W * s
@@ -831,23 +826,10 @@ class SlateView(
         c.restore()
     }
 
+    /** The fade to black over the whole screen; stays black until the app is up (or resetLaunch). */
     private fun drawLaunch(c: Canvas) {
-        val entry = launching ?: return
-        r.set(lerp(growFrom.left, 0f, grow), lerp(growFrom.top, 0f, grow), lerp(growFrom.right, W, grow), lerp(growFrom.bottom, H, grow))
-        val rad = TILE_R * FOCUS_S * (1 - grow)
-        c.save()
-        clip.reset(); clip.addRoundRect(r, rad, rad, Path.Direction.CW)
-        c.clipPath(clip)
-        c.drawBitmap(tileArt(entry), null, r, bitmapPaint)
-        if (flat > 0f) {
-            fill.color = alpha(entry.color, flat)
-            c.drawRect(r, fill)
-            val ink = if (lum(entry.color) > .45f) BASE else Color.WHITE
-            launchName.color = alpha(ink, flat)
-            c.drawText(entry.title, W / 2, 552f, launchName)
-            launchSub.color = alpha(ink, .6f * flat)
-            c.drawText("Opening", W / 2, 616f, launchSub)
-        }
-        c.restore()
+        if (launching == null || dark <= 0f) return
+        fill.color = alpha(BASE, dark)
+        c.drawRect(0f, 0f, W, H, fill)
     }
 }
