@@ -32,6 +32,11 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
         private val ANIM_KEYS = arrayOf("window_animation_scale", "transition_animation_scale", "animator_duration_scale")
         const val DEFAULT_NAME = "SEEKER"
         const val MAX_NAME = 12
+        /** POCKET's FAVORITE COLOR choices, in cycle order (light gray first: the owner's pick over pink). */
+        val POCKET_COLORS = linkedMapOf(
+            "GRAY" to 0xFFA9ADB5.toInt(), "BLUE" to 0xFF2878E8.toInt(), "RED" to 0xFFE83838.toInt(),
+            "ORANGE" to 0xFFF88800.toInt(), "GREEN" to 0xFF28A838.toInt(), "PURPLE" to 0xFF8848D8.toInt(),
+        )
         /** The characters the dot-matrix and pixel fonts can draw. */
         private val NAME_CHARS = Regex("[^A-Z0-9 +\\-.!&]")
 
@@ -45,6 +50,8 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
     /** HOME MODE SLATE's screen, built the first time it's shown. */
     private var slate: SlateView? = null
     private var backdrop: Backdrop? = null
+    /** HOME MODE POCKET's screen, built the first time it's shown. */
+    private var pocket: PocketView? = null
     private var settings: SettingsView? = null
     /** Game screens built so far, by HOME MODE name. Only the flavor's BuiltModes can appear here. */
     private val games = HashMap<String, GameScreen>()
@@ -64,7 +71,7 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
     }
 
     /** The home screens built so far (the wheel always, SLATE once shown): every update goes to both. */
-    private fun homes(): List<HomeScreen> = listOfNotNull(view, slate)
+    private fun homes(): List<HomeScreen> = listOfNotNull(view, slate, pocket)
 
     /** v5 widgets (STATS FOR NERDS): CPU and MEMORY every 2 s, STORAGE every 30 s, only while a home screen is shown. */
     private var stats: SysStats? = null
@@ -96,7 +103,10 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
 
     /** HOME MODE can change from settings or from the com.seeker.tv.MODE broadcast (same process). */
     private val modeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == "name") { main.post { view?.setGreeting(greetingText()); settings?.invalidate() }; return@OnSharedPreferenceChangeListener }
+        if (key == "name" || key == "pocket_color") {
+            main.post { view?.setGreeting(greetingText()); pocket?.refresh(); settings?.invalidate() }
+            return@OnSharedPreferenceChangeListener
+        }
         if (key == "weather_rev") { main.post { refetchWeather() }; return@OnSharedPreferenceChangeListener }
         if (key != "home_mode") return@OnSharedPreferenceChangeListener
         main.post {
@@ -337,6 +347,13 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
 
     override fun backdrop(): android.graphics.Bitmap? = slate?.currentPhoto
 
+    override fun favoriteColor(): String = prefs.getString("pocket_color", null)?.takeIf { it in POCKET_COLORS } ?: POCKET_COLORS.keys.first()
+
+    override fun cycleFavoriteColor() {
+        val names = POCKET_COLORS.keys.toList()
+        prefs.edit().putString("pocket_color", names[(names.indexOf(favoriteColor()) + 1) % names.size]).apply()  // the listener redraws
+    }
+
     override fun openAppList() {
         val v = view ?: return
         wheelVisit = true
@@ -373,6 +390,7 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
         when (if (wheelVisit) "WHEEL" else homeMode()) {
             "WHEEL" -> show(v)
             "SLATE" -> show(slate ?: buildSlate())
+            "POCKET" -> show(pocket ?: buildPocket())
             else -> {
                 val mode = homeMode()
                 val g = games[mode] ?: BuiltModes.GAMES.firstOrNull { it.name == mode }?.create?.invoke(this, this)
@@ -396,6 +414,15 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
         weather?.let { s.setWeather(it.cached()) }
         refreshPhotos()
         return s
+    }
+
+    /** POCKET's screen; NAME goes in its pill, FAVORITE COLOR tints it. */
+    private fun buildPocket(): PocketView {
+        val p = PocketView(this, this, { name() }, { POCKET_COLORS.getValue(favoriteColor()) })
+        pocket = p
+        p.showApps(Apps.wheel(allApps, prefs))
+        weather?.let { p.setWeather(it.cached()) }
+        return p
     }
 
     /** Once a day, only while SLATE is the home mode (the other modes never touch the network for it). */

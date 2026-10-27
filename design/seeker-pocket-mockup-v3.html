@@ -1,0 +1,382 @@
+<title>Seeker Pocket</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Seeker Pocket mockup v3 (design/POCKET-SPEC.md): a pixel-true take on a 2008 handheld's bottom-screen menu.
+   Everything is drawn on a 384x216 canvas (the handheld's pixel size, widened to 16:9) and scaled x5 with
+   nearest-neighbour, so every edge is a hard pixel. The font, art and sounds are original. */
+:root { --page: #121316; --line: #1f2126; color-scheme: dark; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--page); color: #e8e9eb; font-family: system-ui, sans-serif;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 16px;
+}
+.wrap { max-width: 1400px; margin: 0 auto; display: grid; gap: 12px; }
+.frame { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 6px; box-shadow: 0 0 0 1px var(--line); background: #fff; }
+#screen { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; outline: none; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; font-size: 13px; color: #8a8f98; }
+.controls .group { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.controls .label { text-transform: uppercase; letter-spacing: .12em; font-size: 11px; color: #4a4e56; margin-right: 4px; }
+button { font: inherit; font-size: 12px; background: transparent; color: #8a8f98; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+button:hover, button:focus-visible { color: #e8e9eb; border-color: #8a8f98; outline: none; }
+button.on { color: #e8e9eb; border-color: #e8e9eb; }
+.note { font-size: 13px; color: #8a8f98; line-height: 1.5; max-width: 80ch; }
+</style>
+
+<div class="wrap">
+  <div class="frame"><canvas id="screen" width="384" height="216" tabindex="0" aria-label="Seeker Pocket home menu mockup. Left and right move, Enter opens, hold Enter to move or hide an app."></canvas></div>
+  <div class="controls">
+    <div class="group"><span class="label">Color</span><button data-c="#a9adb5" class="on">Gray</button><button data-c="#2878e8">Blue</button><button data-c="#e83838">Red</button><button data-c="#f88800">Orange</button><button data-c="#28a838">Green</button><button data-c="#8848d8">Purple</button></div>
+    <div class="group"><span class="label">Demo</span><button id="d-sound">Sound: off</button></div>
+  </div>
+  <p class="note">Pocket v3: proportions from the handheld (big message box, 52-px tiles, a tall START frame on the selection, scrollbar band edge to edge), pixel-true. The whole screen is 384x216 pixels (a handheld's 256x192 widened to 16:9) shown at x5, so nothing is smooth: text, frames, brackets, icons and motion all move in whole pixels. Click the screen, ← → to move, Enter to open, hold Enter for MOVE / HIDE / CANCEL. On the TV each tile is the app's own icon shrunk to 32x32 pixels; here they're stand-ins made the same way.</p>
+</div>
+
+<script>
+(function(){
+  var W = 384, H = 216;
+  var cv = document.getElementById('screen'), c = cv.getContext('2d');
+  c.imageSmoothingEnabled = false;
+
+  // ---------- original pixel font: proportional, 7-px caps, 5-px x-height, 2-px descenders ----------
+  var G = {
+    A:".###.|#...#|#...#|#####|#...#|#...#|#...#", B:"####.|#...#|#...#|####.|#...#|#...#|####.", C:".###.|#...#|#....|#....|#....|#...#|.###.",
+    D:"####.|#...#|#...#|#...#|#...#|#...#|####.", E:"#####|#....|#....|####.|#....|#....|#####", F:"#####|#....|#....|####.|#....|#....|#....",
+    G:".###.|#...#|#....|#.###|#...#|#...#|.###.", H:"#...#|#...#|#...#|#####|#...#|#...#|#...#", I:"###|.#.|.#.|.#.|.#.|.#.|###",
+    J:"..###|...#.|...#.|...#.|#..#.|#..#.|.##..", K:"#...#|#..#.|#.#..|##...|#.#..|#..#.|#...#", L:"#....|#....|#....|#....|#....|#....|#####",
+    M:"#...#|##.##|#.#.#|#.#.#|#...#|#...#|#...#", N:"#...#|##..#|#.#.#|#..##|#...#|#...#|#...#", O:".###.|#...#|#...#|#...#|#...#|#...#|.###.",
+    P:"####.|#...#|#...#|####.|#....|#....|#....", Q:".###.|#...#|#...#|#...#|#.#.#|#..#.|.##.#", R:"####.|#...#|#...#|####.|#.#..|#..#.|#...#",
+    S:".####|#....|#....|.###.|....#|....#|####.", T:"#####|..#..|..#..|..#..|..#..|..#..|..#..", U:"#...#|#...#|#...#|#...#|#...#|#...#|.###.",
+    V:"#...#|#...#|#...#|#...#|.#.#.|.#.#.|..#..", W:"#...#|#...#|#...#|#.#.#|#.#.#|##.##|#...#", X:"#...#|#...#|.#.#.|..#..|.#.#.|#...#|#...#",
+    Y:"#...#|#...#|.#.#.|..#..|..#..|..#..|..#..", Z:"#####|....#|...#.|..#..|.#...|#....|#####",
+    a:"....|....|.##.|...#|.###|#..#|.###", b:"#...|#...|###.|#..#|#..#|#..#|###.", c:"....|....|.###|#...|#...|#...|.###",
+    d:"...#|...#|.###|#..#|#..#|#..#|.###", e:"....|....|.##.|#..#|####|#...|.###", f:".##|#..|###|#..|#..|#..|#..",
+    g:"....|....|.###|#..#|#..#|#..#|.###|...#|###.", h:"#...|#...|###.|#..#|#..#|#..#|#..#", i:"#|.|#|#|#|#|#",
+    j:".#|..|.#|.#|.#|.#|.#|.#|#.", k:"#...|#...|#..#|#.#.|##..|#.#.|#..#", l:"#|#|#|#|#|#|#",
+    m:".....|.....|####.|#.#.#|#.#.#|#.#.#|#.#.#", n:"....|....|###.|#..#|#..#|#..#|#..#", o:"....|....|.##.|#..#|#..#|#..#|.##.",
+    p:"....|....|###.|#..#|#..#|#..#|###.|#...|#...", q:"....|....|.###|#..#|#..#|#..#|.###|...#|...#", r:"...|...|#.#|##.|#..|#..|#..",
+    s:"....|....|.###|#...|.##.|...#|###.", t:".#.|.#.|###|.#.|.#.|.#.|..#", u:"....|....|#..#|#..#|#..#|#..#|.###",
+    v:".....|.....|#...#|#...#|.#.#.|.#.#.|..#..", w:".....|.....|#...#|#...#|#.#.#|#.#.#|.#.#.", x:".....|.....|#...#|.#.#.|..#..|.#.#.|#...#",
+    y:"....|....|#..#|#..#|#..#|#..#|.###|...#|###.", z:"....|....|####|..#.|.#..|#...|####",
+    "0":".###.|#...#|#..##|#.#.#|##..#|#...#|.###.", "1":"..#..|.##..|..#..|..#..|..#..|..#..|.###.", "2":".###.|#...#|....#|...#.|..#..|.#...|#####",
+    "3":"####.|....#|....#|.###.|....#|....#|####.", "4":"...#.|..##.|.#.#.|#..#.|#####|...#.|...#.", "5":"#####|#....|####.|....#|....#|#...#|.###.",
+    "6":".###.|#....|#....|####.|#...#|#...#|.###.", "7":"#####|....#|...#.|..#..|.#...|.#...|.#...", "8":".###.|#...#|#...#|.###.|#...#|#...#|.###.",
+    "9":".###.|#...#|#...#|.####|....#|....#|.###.",
+    " ":"...|...|...|...|...|...|...", ":":".|.|#|.|.|#|.", "/":"..#|..#|.#.|.#.|.#.|#..|#..", "°":".#.|#.#|.#.|...|...|...|...",
+    "+":".....|..#..|..#..|#####|..#..|..#..|.....", ".":".|.|.|.|.|.|#", ",":"..|..|..|..|..|..|.#|#.", "&":".##..|#..#.|#.#..|.#...|#.#.#|#..#.|.##.#",
+    "'":"#|#|.|.|.|.|.", "-":"...|...|...|###|...|...|...", "!":"#|#|#|#|#|.|#", "?":".###.|#...#|....#|...#.|..#..|.....|..#..", "←":"..#..|.#...|#####|.#...|..#..|.....|.....", "→":"..#..|...#.|#####|...#.|..#..|.....|....."};
+  var FONT = {};
+  for (var ch in G) { var rows = G[ch].split('|'); FONT[ch] = { w: rows[0].length, rows: rows }; }
+  function textW(s, k){ k = k || 1; var w = 0; for (var i = 0; i < s.length; i++) w += ((FONT[s[i]] || FONT[' ']).w + 1); return (w - 1) * k; }
+  function text(s, x, y, col, k){
+    k = k || 1; c.fillStyle = col;
+    for (var i = 0; i < s.length; i++){
+      var g = FONT[s[i]] || FONT[' '];
+      for (var r = 0; r < g.rows.length; r++) for (var q = 0; q < g.w; q++) if (g.rows[r][q] === '#') c.fillRect(x + q*k, y + r*k, k, k);
+      x += (g.w + 1) * k;
+    }
+  }
+
+  // ---------- pixel primitives ----------
+  function rect(x, y, w, h, col){ c.fillStyle = col; c.fillRect(x|0, y|0, w|0, h|0); }
+  /** Rounded box with stepped pixel corners (radius 1..3), optional 1-px border. */
+  var CORNER = {1:[1], 2:[2,1], 3:[3,1,1], 4:[4,2,1,1]};
+  function shape(x, y, w, h, r, col){
+    var cut = CORNER[r] || [];
+    for (var row = 0; row < h; row++){
+      var inset = row < cut.length ? cut[row] : (h - 1 - row < cut.length ? cut[h - 1 - row] : 0);
+      rect(x + inset, y + row, w - 2*inset, 1, col);
+    }
+  }
+  /** Rounded box; with a border, a 1-px outline that follows the stepped corners (fill may be translucent). */
+  function box(x, y, w, h, r, fill, border){
+    x |= 0; y |= 0;
+    if (!border){ shape(x, y, w, h, r, fill); return; }
+    var cut = CORNER[r] || [];
+    function ins(k){ return k < cut.length ? cut[k] : (h - 1 - k < cut.length ? cut[h - 1 - k] : 0); }
+    for (var k = 0; k < h; k++){
+      var a = ins(k);
+      if (k === 0 || k === h - 1){ rect(x + a, y + k, w - 2*a, 1, border); continue; }
+      var e = Math.max(a, ins(k - 1) - 1, ins(k + 1) - 1);   // the outline reaches over to its neighbors' edges
+      rect(x + a, y + k, e - a + 1, 1, border);
+      rect(x + w - 1 - e, y + k, e - a + 1, 1, border);
+      if (w - 2*e - 2 > 0) rect(x + e + 1, y + k, w - 2*e - 2, 1, fill);
+    }
+  }
+
+  // ---------- apps: 32x32 icons, made the way the TV will make them (draw big, shrink to 32 px) ----------
+  var APPS = [
+    {n:"Netflix", s:"Movies & shows", bg:"#000000", fg:"#e50914", g:"N", col:"#e50914"},
+    {n:"YouTube", s:"Videos", bg:"#ff0000", fg:"#ffffff", g:"▶", col:"#ff0000"},
+    {n:"Hulu", s:"Movies & shows", bg:"#0b0c0f", fg:"#1ce783", g:"hulu", col:"#1ce783"},
+    {n:"Prime Video", s:"Movies & shows", bg:"#00a8e1", fg:"#ffffff", g:"prime", col:"#00a8e1"},
+    {n:"Disney+", s:"Movies & shows", bg:"#0b1a5c", fg:"#ffffff", g:"D+", col:"#2e6bff"},
+    {n:"Max", s:"Movies & shows", bg:"#3d34ff", fg:"#ffffff", g:"max", col:"#3d34ff"},
+    {n:"Peacock", s:"Movies & shows", bg:"#000000", fg:"#ffc72c", g:"P", col:"#ffc72c"},
+    {n:"Apple TV", s:"Movies & shows", bg:"#111111", fg:"#ffffff", g:"tv", col:"#9a9aa0"},
+    {n:"Play Store", s:"Get more apps", bg:"#ffffff", fg:"#28a838", g:"▲", col:"#28a838"},
+    {n:"Settings", s:"Seeker and TV settings", bg:"#8e9096", fg:"#ffffff", g:"⚙", col:"#8e9096", settings:true}];
+  function makeIcon(a){
+    var big = document.createElement('canvas'); big.width = big.height = 128;
+    var b = big.getContext('2d');
+    b.fillStyle = a.bg; b.beginPath(); b.roundRect(0, 0, 128, 128, 26); b.fill();
+    b.fillStyle = a.fg; b.textAlign = 'center'; b.textBaseline = 'middle';
+    var fs = a.settings ? 92 : a.g.length > 2 ? 40 : 78;
+    b.font = '900 ' + fs + 'px system-ui, sans-serif'; b.fillText(a.g, 64, 68);
+    var small = document.createElement('canvas'); small.width = small.height = 32;
+    var s = small.getContext('2d'); s.imageSmoothingEnabled = true; s.imageSmoothingQuality = 'high';
+    s.drawImage(big, 0, 0, 32, 32);
+    // hard alpha: a pixel is either there or not
+    var img = s.getImageData(0, 0, 32, 32), p = img.data;
+    for (var i = 3; i < p.length; i += 4) p[i] = p[i] < 110 ? 0 : 255;
+    s.putImageData(img, 0, 0);
+    return small;
+  }
+  APPS.forEach(function(a){ a.icon = makeIcon(a); });
+  var EMPTY = 5;
+  CORNER[5] = [5,3,2,1,1]; CORNER[6] = [6,4,3,2,1,1]; CORNER[8] = [8,6,4,3,2,2,1,1];
+
+  // ---------- layout (logical pixels; proportions from the handheld's 256x192 screen) ----------
+  var CX = 192;
+  var BOX = {x: 44, y: 20, w: 296, h: 62, r: 8};          // message box
+  var TILE = 52, GAP = 6, SEL_W = 66, SEL_H = 82;          // frames: 52x52; the selected one 66x82 with START
+  var NEAR = SEL_W / 2 + GAP + TILE / 2;                   // center distance to a neighbor of the selection (65)
+  var PITCH = TILE + GAP;                                  // between unselected tiles (58)
+  var SEL_TOP = 96, ROW_CY = SEL_TOP + 7 + TILE / 2;       // tiles share the selection's inner-box center (129)
+  var BAND = 192;                                          // scrollbar band: 192..215, edge to edge
+  var accent = "#a9adb5";
+  var sel = 0, pos = 0;                                    // pos eases toward sel each frame (in slots)
+  var busy = false, moving = false, menuOn = false, menuSel = 0, soundOn = false;
+  var hop = 0, fade = 0, launchT = -1, bob = 0, t = 0;
+  var arrowL = 0, arrowR = 0;
+
+  // ---------- sound (original blips) ----------
+  var ac = null;
+  function tone(type, f0, f1, ms, gain, delay){
+    if (!soundOn) return;
+    ac = ac || new AudioContext();
+    var o = ac.createOscillator(), g = ac.createGain(), tt = ac.currentTime + (delay || 0) / 1000;
+    o.type = type; o.frequency.setValueAtTime(f0, tt); o.frequency.exponentialRampToValueAtTime(f1, tt + ms/1000);
+    g.gain.setValueAtTime(gain, tt); g.gain.exponentialRampToValueAtTime(0.0001, tt + ms/1000);
+    o.connect(g).connect(ac.destination); o.start(tt); o.stop(tt + ms/1000 + 0.02);
+  }
+  var sfx = {
+    move: function(){ tone('square', 1760, 1760, 22, 0.03); },
+    edge: function(){ tone('square', 220, 200, 50, 0.04); },
+    ok:   function(){ tone('square', 988, 988, 60, 0.04); tone('square', 1319, 1319, 120, 0.04, 60); },
+    menu: function(){ tone('square', 1175, 1175, 40, 0.035); }};
+
+  function shade(hex, k){ var n = parseInt(hex.slice(1), 16); return 'rgb(' + [(n>>16)&255, (n>>8)&255, n&255].map(function(v){ return Math.min(255, Math.round(v*k)); }).join(',') + ')'; }
+  function tint(hex, k){ var n = parseInt(hex.slice(1), 16); return 'rgb(' + [(n>>16)&255, (n>>8)&255, n&255].map(function(v){ return Math.round(v + (255 - v)*k); }).join(',') + ')'; }
+
+  // ---------- drawing ----------
+  function drawBackground(){
+    rect(0, 0, W, H, '#f6f6f6');
+    for (var y = 17; y < BAND; y += 2) rect(0, y, W, 1, '#efefef');   // LCD lines
+  }
+  function drawBar(){
+    var shades = ['#ffffff','#fbfbfb','#f6f6f6','#f2f2f2','#eeeeee','#ebebeb','#e8e8e8','#e5e5e5','#e2e2e2','#dfdfdf','#dcdcdc','#d9d9d9','#d6d6d6','#d3d3d3','#d0d0d0'];
+    for (var i = 0; i < 15; i++) rect(0, i, W, 1, shades[i]);
+    rect(0, 15, W, 1, '#a0a0a0');
+    var name = 'SEEKER', nw = textW(name) + 10;
+    box(3, 3, nw, 11, 2, accent);
+    rect(5, 12, nw - 4, 1, shade(accent, .78));
+    text(name, 8, 5, '#ffffff');
+    var now = new Date(), h = now.getHours() % 12 || 12, m = ('0' + now.getMinutes()).slice(-2);
+    var clock = h + (now.getSeconds() % 2 ? ' ' : ':') + m, date = (now.getMonth() + 1) + '/' + now.getDate(), temp = '67°';
+    var x = W - 4 - textW(clock); text(clock, x, 5, '#383838');
+    x -= 10 + textW(date); text(date, x, 5, '#606060');
+    x -= 10 + textW(temp); text(temp, x, 5, '#606060');
+    sun(x - 12, 4);
+  }
+  function sun(x, y){
+    var S = ["....#....",".#.....#.","...###...","..#####..","#.#####.#","..#####..","...###...",".#.....#.","....#...."];
+    for (var r = 0; r < 9; r++) for (var q = 0; q < 9; q++) if (S[r][q] === '#') rect(x + q, y + r, 1, 1, '#f8a800');
+  }
+
+  /** The message box: light gray, dark border, big pixel-stepped corners, pointer down at the selection. */
+  function drawBox(){
+    var b = BOX;
+    box(b.x, b.y, b.w, b.h, b.r, '#e8e8e8', '#6c6c6c');
+    rect(b.x + 8, b.y + 2, b.w - 16, 1, '#f4f4f4');                          // top highlight
+    for (var i = 0; i < 7; i++){                                              // pointer hanging under the box
+      var w = 13 - 2*i, px = CX - (w >> 1), py = b.y + b.h - 1 + i;
+      rect(px, py, w, 1, '#e8e8e8');
+      rect(px - 1, py, 1, 1, '#6c6c6c'); rect(px + w, py, 1, 1, '#6c6c6c');
+    }
+    rect(CX, b.y + b.h + 6, 1, 1, '#6c6c6c');
+    if (menuOn){ drawMenu(); return; }
+    var a = APPS[sel], l1 = a.n, l2 = moving ? '← → to move, OK to drop' : a.s;
+    text(l1, CX - (textW(l1) >> 1), b.y + 18, '#404040');
+    text(l2, CX - (textW(l2) >> 1), b.y + 34, '#404040');
+  }
+  function drawMenu(){
+    var q = 'What would you like to do?';
+    text(q, CX - (textW(q) >> 1), BOX.y + 12, '#404040');
+    var labels = ['MOVE', 'HIDE', 'CANCEL'], bw = 70, gap = 8, x = CX - (3*bw + 2*gap)/2, y = BOX.y + 32;
+    labels.forEach(function(l, i){
+      var on = i === menuSel, red = l === 'HIDE', col = red ? '#e83838' : accent;
+      box(x, y + 2, bw, 16, 4, '#a8a8a8');
+      box(x, y, bw, 16, 4, on ? tint(col, .82) : '#fafafa', on ? col : '#9a9a9a');
+      text(l, x + (bw >> 1) - (textW(l) >> 1), y + 5, on ? shade(col, .8) : '#606060');
+      x += bw + gap;
+    });
+  }
+
+  /** Center x of slot i while the row is at pos: neighbors of the selection sit 65 out, the rest 58 apart. */
+  function slotX(i){
+    var d = i - pos, a = Math.abs(d);
+    return Math.round(CX + Math.sign(d) * (a <= 1 ? a * NEAR : NEAR + (a - 1) * PITCH));
+  }
+  function frameTile(x, y, w, h){
+    box(x, y + 3, w, h, 6, '#c4c4c4');                                       // shadow ledge
+    box(x, y, w, h, 6, '#ffffff', '#b4b4b4');
+    var SH = ['#fbfbfb','#f6f6f6','#f1f1f1','#ececec','#e8e8e8','#e4e4e4'];
+    for (var r = 0; r < 6; r++) rect(x + 4, y + h - 8 + r, w - 8, 1, SH[r]);  // soft lower shade
+  }
+  function drawRow(){
+    var n = APPS.length + EMPTY;
+    for (var i = 0; i < n; i++){
+      if (i === sel) continue;
+      var cx = slotX(i), x = cx - TILE/2, y = ROW_CY - TILE/2;
+      if (x + TILE < 0 || x > W) continue;
+      if (moving && i < APPS.length) x += ((Math.floor(t / 8) + i) % 2 ? 1 : -1);
+      if (i >= APPS.length){ dashed(x, y, TILE, TILE); continue; }
+      frameTile(x, y, TILE, TILE);
+      c.drawImage(APPS[i].icon, x + 10, y + 10);
+    }
+    drawSelected();
+  }
+  /** The selection: a taller frame in the accent color, the icon in a white box, START underneath. */
+  function drawSelected(){
+    var cx = slotX(sel), x = cx - SEL_W/2, y = SEL_TOP - hop - (moving ? 4 : 0);
+    if (moving) x += (Math.floor(t / 8) % 2 ? 1 : -1);
+    var d = bob;   // the frame breathes 1 px
+    box(x - d, y + 3 - d, SEL_W + 2*d, SEL_H + 2*d, 8, shade(accent, .7));
+    box(x - d, y - d, SEL_W + 2*d, SEL_H + 2*d, 8, accent, shade(accent, .75));
+    rect(x + 6, y + 1 - d, SEL_W - 12, 1, tint(accent, .45));                 // top highlight
+    if (sel >= APPS.length) return;
+    box(x + 7, y + 7, TILE, TILE, 6, '#ffffff', shade(accent, .8));
+    c.drawImage(APPS[sel].icon, x + 7 + 10, y + 7 + 10);
+    var label = APPS[sel].settings ? 'OPEN' : 'START';
+    text(label, cx - (textW(label) >> 1), y + SEL_H - 15, '#ffffff');
+  }
+  function dashed(x, y, w, h){
+    for (var i = 4; i < w - 4; i += 2){ rect(x + i, y, 1, 1, '#c8c8c8'); rect(x + i, y + h - 1, 1, 1, '#c8c8c8'); }
+    for (var j = 4; j < h - 4; j += 2){ rect(x, y + j, 1, 1, '#c8c8c8'); rect(x + w - 1, y + j, 1, 1, '#c8c8c8'); }
+  }
+
+  /** The scrollbar band: edge to edge along the bottom, accent arrow tabs at both ends. */
+  function drawScroll(){
+    var n = APPS.length + EMPTY, y = BAND, h = H - BAND;
+    rect(0, y, W, 1, '#9c9c9c');
+    rect(0, y + 1, W, h - 1, '#dcdcdc');
+    rect(0, y + 1, W, 1, '#f2f2f2');
+    tab(0, -1, arrowL); tab(W - 26, 1, arrowR);
+    var tx = 40, tw = W - 80, my = y + 12;
+    var step = tw / (n - 1);
+    for (var i = 0; i < n; i++){
+      var mx = Math.round(tx + step * i);
+      if (i < APPS.length) rect(mx - 1, my - 1, 3, 3, '#505050');
+      else rect(mx, my, 1, 1, '#9a9a9a');
+      if (i < n - 1) for (var k = 3; k < step - 2; k += 3) rect(Math.round(mx + k), my, 1, 1, '#9a9a9a');   // dotted track
+    }
+    // the window over the 7 slots around the selection, accent outline
+    var vis = 7, ww = Math.round(step * vis);
+    var wx = Math.max(tx - 8, Math.min(tx + tw + 8 - ww, Math.round(tx + step * pos - ww / 2)));
+    box(wx, y + 4, ww, h - 8, 2, 'rgba(255,255,255,.55)', accent);
+    var sx = Math.round(tx + step * sel);
+    rect(sx - 2, my - 2, 5, 5, '#2878e8');                                    // the selection's own dot
+  }
+  /** Arrow tab at an edge of the band; dir -1 points left, 1 points right. */
+  function tab(x, dir, pressed){
+    var y = BAND + 1, h = H - BAND - 1, w = 26;
+    rect(x, y, w, h, pressed ? tint(accent, .55) : tint(accent, .72));
+    rect(dir < 0 ? x + w - 1 : x, y, 1, h, shade(accent, .8));
+    var cy = y + (h >> 1) + (pressed ? 1 : 0), ax = x + 10;
+    for (var i = 0; i < 6; i++){
+      var hh = 11 - 2*i;
+      rect(dir < 0 ? ax + 5 - i : ax + i, cy - (hh >> 1), 1, hh, accent);   // tallest column at the base, tip outward
+    }
+  }
+
+  function draw(){
+    drawBackground(); drawBar(); drawBox(); drawRow(); drawScroll();
+    if (fade > 0){ c.globalAlpha = Math.min(1, fade); rect(0, 0, W, H, '#ffffff'); c.globalAlpha = 1; }
+  }
+
+  // ---------- the loop: 60 fps, everything stepped in whole pixels ----------
+  function frame(){
+    t++;
+    var d = sel - pos;
+    if (d !== 0) pos = Math.abs(d) < 0.03 ? sel : pos + d / 3;    // a third of the way each frame: snappy, no overshoot
+    bob = Math.floor(t / 15) % 2;
+    if (arrowL > 0) arrowL--; if (arrowR > 0) arrowR--;
+    if (launchT >= 0){
+      launchT++;
+      var HOP = [0,3,5,6,6,5,3,0,1,0];
+      hop = HOP[Math.min(launchT, HOP.length - 1)];
+      if (launchT > 8) fade = Math.floor((launchT - 8) / 3) / 6;     // white in 6 hard steps
+      if (launchT > 100){ launchT = -1; hop = 0; fade = 0; busy = false; }   // mockup only: come back
+    }
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  function select(i){ sel = i; }
+  function swap(i, j){ var a = APPS[i]; APPS[i] = APPS[j]; APPS[j] = a; }
+
+  // ---------- remote ----------
+  var holdTimer = null, held = false;
+  cv.addEventListener('keydown', function(e){
+    var k = e.key;
+    if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Enter',' ','Escape','Backspace'].indexOf(k) >= 0) e.preventDefault();
+    if (busy) return;
+    if (e.repeat && (k === 'Enter' || k === ' ')) return;
+    if (menuOn){
+      if ((k === 'ArrowRight' || k === 'ArrowDown') && menuSel < 2){ menuSel++; sfx.move(); }
+      else if ((k === 'ArrowLeft' || k === 'ArrowUp') && menuSel > 0){ menuSel--; sfx.move(); }
+      else if (k === 'Enter' || k === ' '){ held = true; pick(); }
+      else if (k === 'Escape' || k === 'Backspace') menuOn = false;
+      return;
+    }
+    if (moving){
+      if (k === 'ArrowRight' && sel < APPS.length - 2){ swap(sel, sel + 1); select(sel + 1); arrowR = 6; sfx.move(); }
+      else if (k === 'ArrowLeft' && sel > 0){ swap(sel, sel - 1); select(sel - 1); arrowL = 6; sfx.move(); }
+      else if (k === 'Enter' || k === ' ' || k === 'Escape' || k === 'Backspace'){ held = true; moving = false; sfx.ok(); }
+      return;
+    }
+    if (k === 'ArrowRight'){ arrowR = 6; if (sel < APPS.length - 1){ select(sel + 1); sfx.move(); } else sfx.edge(); }
+    else if (k === 'ArrowLeft'){ arrowL = 6; if (sel > 0){ select(sel - 1); sfx.move(); } else sfx.edge(); }
+    else if (k === 'Enter' || k === ' '){
+      held = false;
+      if (APPS[sel].settings){ held = true; go(); return; }
+      holdTimer = setTimeout(function(){ held = true; menuOn = true; menuSel = 0; sfx.menu(); }, 600);
+    }
+  });
+  cv.addEventListener('keyup', function(e){
+    if (e.key === 'Enter' || e.key === ' '){ clearTimeout(holdTimer); if (!held && !menuOn && !moving) go(); held = false; }
+  });
+  cv.addEventListener('click', function(){ cv.focus(); });
+  function pick(){
+    var p = menuSel; menuOn = false; sfx.ok();
+    if (p === 0) moving = true;
+    else if (p === 1){ APPS.splice(sel, 1); select(Math.min(sel, APPS.length - 1)); }
+  }
+  function go(){ if (busy) return; busy = true; sfx.ok(); launchT = 0; }
+
+  // ---------- controls ----------
+  Array.prototype.forEach.call(document.querySelectorAll('[data-c]'), function(b){
+    b.addEventListener('click', function(){
+      Array.prototype.forEach.call(document.querySelectorAll('[data-c]'), function(x){ x.className = ''; });
+      b.className = 'on'; accent = b.getAttribute('data-c');
+    });
+  });
+  document.getElementById('d-sound').addEventListener('click', function(){ soundOn = !soundOn; this.textContent = 'Sound: ' + (soundOn ? 'on' : 'off'); });
+
+  window.__pocket = { key: function(k, up){ cv.dispatchEvent(new KeyboardEvent(up ? 'keyup' : 'keydown', {key: k, bubbles: true})); }, settle: function(){ pos = sel; } };
+  frame();
+  setTimeout(function(){ cv.focus(); }, 0);
+})();
+</script>

@@ -55,6 +55,8 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
         fun statsOn(): Boolean            // v5: CPU / MEMORY / STORAGE widgets on the wheel
         fun toggleStats()
         fun backdrop(): Bitmap?           // SLATE: the photo on the home screen, behind its settings
+        fun favoriteColor(): String       // POCKET: the name pill and the selection frame
+        fun cycleFavoriteColor()
     }
 
     private companion object {
@@ -69,7 +71,7 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
         const val TITLE_CELL = 12f
         const val LIST_TOP = 330f
         const val VALUE_X = 1100f
-        val HOMES = setOf("WHEEL", "SLATE")  // full home screens; the others are games with an APP LIST row
+        val HOMES = setOf("WHEEL", "SLATE", "POCKET")  // full home screens; the others are games with an APP LIST row
         val MAIN = listOf("SYSTEM SETTINGS", "INPUTS", "HOME MODE", "SOUND", "STATS FOR NERDS", "NAME", "WEATHER LOCATION", "HIDDEN APPS", "ABOUT")
         const val ROW_SP = 104f
         const val LAST_ROW = 1000f  // lowest row center
@@ -89,7 +91,8 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
 
     /** The main list; the game modes add APP LIST on top. HOME MODE only when a game is built in. */
     private fun mainRows(): List<String> {
-        val main = if (host.homeModes().size > 1) MAIN else MAIN - "HOME MODE"
+        var main = if (host.homeModes().size > 1) MAIN else MAIN - "HOME MODE"
+        if (host.homeMode() == "POCKET") main = main.toMutableList().apply { add(indexOf("SOUND"), "FAVORITE COLOR") }
         return if (game) listOf("APP LIST") + main else main
     }
     private var appSel = 0
@@ -194,6 +197,7 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
             "SYSTEM SETTINGS" -> host.openSystemSettings()
             "INPUTS" -> host.openInputs()
             "HOME MODE" -> { host.cycleHomeMode(); modeChanged() }
+            "FAVORITE COLOR" -> host.cycleFavoriteColor()
             "SOUND" -> host.toggleSound()
             "STATS FOR NERDS" -> host.toggleStats()
             "NAME" -> host.editName()
@@ -292,6 +296,7 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
             Dots.text(c, label, LEFT, cy - 3.5f * cell, cell, if (on) Dots.FG else Dots.MUTE, on, Dots.SEL_GRID)
             val v = when (label) {
                 "HOME MODE" -> host.homeMode()
+                "FAVORITE COLOR" -> host.favoriteColor()
                 "SOUND" -> if (host.soundOn()) "ON" else "OFF"
                 "STATS FOR NERDS" -> if (host.statsOn()) "ON" else "OFF"
                 "NAME" -> host.name()
