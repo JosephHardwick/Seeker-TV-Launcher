@@ -91,15 +91,10 @@ body {
 .menu div.hide { color: var(--red); }
 .menu div.focus { background: rgba(255,255,255,.12); }
 
-/* launch */
-.grow { position: absolute; overflow: hidden; display: none; z-index: 8; }
-.grow.go { transition: left .52s cubic-bezier(.3,0,.1,1), top .52s cubic-bezier(.3,0,.1,1), width .52s cubic-bezier(.3,0,.1,1), height .52s cubic-bezier(.3,0,.1,1), border-radius .52s cubic-bezier(.3,0,.1,1); }
-.grow .art, .grow .flat { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
-.grow .art { font-weight: 700; font-size: 44px; }
-.grow .flat { flex-direction: column; opacity: 0; transition: opacity .3s var(--ease) .3s; }
-.grow.go .flat { opacity: 1; }
-.grow .flat b { font-size: 96px; font-weight: 600; letter-spacing: -0.02em; }
-.grow .flat i { font-style: normal; font-size: 24px; opacity: .6; margin-top: 18px; }
+/* launch: the tile presses in, the screen fades to black */
+.tile.focus.press { transform: scale(1.07); transition: transform .11s ease-out; }
+.dark { position: absolute; inset: 0; background: var(--bg); opacity: 0; pointer-events: none; z-index: 8; }
+.dark.on { opacity: 1; transition: opacity .33s var(--ease) .12s; }
 
 /* toast */
 .toast { position: absolute; left: 580px; top: 40px; width: 760px; box-sizing: border-box; padding: 22px 28px; border-radius: 28px; background: rgba(44,44,46,.96); display: grid; grid-template-columns: 64px 1fr; gap: 0 22px; align-items: center; box-shadow: 0 20px 60px rgba(0,0,0,.5); transform: translateY(-200px); transition: transform .5s var(--spring); z-index: 9; }
@@ -158,7 +153,7 @@ button.on { color: var(--text); border-color: var(--text); }
         <div class="stitle">Settings</div>
         <div class="sview"><div class="slist" id="slist"></div></div>
       </div>
-      <div class="grow" id="grow"><div class="art" id="growArt"></div><div class="flat" id="growFlat"><b id="growName"></b><i>Opening</i></div></div>
+      <div class="dark" id="dark"></div>
       <div class="toast" id="toast">
         <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 22a2.5 2.5 0 0 0 2.4-2h-4.8a2.5 2.5 0 0 0 2.4 2zm7-6V11a7 7 0 0 0-5.5-6.8V3.5a1.5 1.5 0 0 0-3 0v.7A7 7 0 0 0 5 11v5l-2 2v1h18v-1z"/></svg></div>
         <div class="tt">Code · Build done</div>
@@ -334,24 +329,16 @@ button.on { color: var(--text); border-color: var(--text); }
   function endMove(){ moving = false; row.classList.remove('wiggle'); layout(false); }
   function swap(i, j){ var a = APPS[i]; APPS[i] = APPS[j]; APPS[j] = a; var t = tiles[i]; tiles[i] = tiles[j]; tiles[j] = t; }
 
-  // ---------- launch: the tile grows to fill the screen ----------
-  var grow = $('grow');
+  // ---------- launch: the tile presses in, the screen fades to black (the app would fade in at 450 ms) ----------
+  var dark = $('dark');
   function go(){
-    if (busy) return; busy = true; sfx.ok();
-    var a = onGear ? {n:"Settings", c:"#1C1C1E"} : APPS[sel];
-    var r = onGear ? gear.getBoundingClientRect() : tiles[sel].getBoundingClientRect(), s = stage.getBoundingClientRect(), k = 1920 / s.width;
-    grow.className = 'grow'; grow.style.display = 'block';
-    grow.style.left = (r.left - s.left)*k + 'px'; grow.style.top = (r.top - s.top)*k + 'px';
-    grow.style.width = r.width*k + 'px'; grow.style.height = r.height*k + 'px'; grow.style.borderRadius = onGear ? '50%' : '22px';
-    var ga = $('growArt'); ga.textContent = onGear ? '' : a.n; if (onGear) { ga.style.background = '#1C1C1E'; } else art(ga, a);
-    var gf = $('growFlat'); gf.style.background = a.c; gf.style.color = ink(a.c); $('growName').textContent = a.n;
-    void grow.offsetWidth; grow.className = 'grow go';
-    grow.style.left = '0px'; grow.style.top = '0px'; grow.style.width = '1920px'; grow.style.height = '1080px'; grow.style.borderRadius = '0px';
-    setTimeout(function(){
-      if (onGear) { showSettings(); }
-      grow.style.transition = 'opacity .3s'; grow.style.opacity = 0;
-      setTimeout(function(){ grow.style.display = 'none'; grow.style.transition = ''; grow.style.opacity = ''; grow.className = 'grow'; busy = false; }, 300);
-    }, onGear ? 700 : 1700);
+    if (busy) return; sfx.ok();
+    if (onGear) { showSettings(); return; }   // settings opens straight away
+    busy = true;
+    var t = tiles[sel];
+    t.classList.add('press'); setTimeout(function(){ t.classList.remove('press'); }, 110);
+    dark.className = 'dark on';
+    setTimeout(function(){ dark.className = 'dark'; busy = false; }, 1700);   // mockup only: come back to the row
   }
 
   // ---------- settings ----------

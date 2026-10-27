@@ -52,9 +52,11 @@ v1 owner notes (2026-10-26, from screenshots of the first draft): ditch the gree
 - BACK on the home screen: nothing.
 
 ## Launch
-- The focused tile grows from its rect to the full screen (520 ms, `cubic-bezier(.3,0,.1,1)`), with its radius going to 0.
-- The art crossfades to the flat brand color with the app name centered, 96 px weight 600 (dark ink on light brands, white otherwise), and "Opening" 24 px at 60% below.
-- The launch intent fires at 900 ms, as on the wheel, so the name shows before the app covers it. If nothing came up, the screen resets after 4 s (MainActivity), and always on return.
+- The focused tile presses in like a button: 94% and back over 220 ms.
+- From 120 ms the whole screen fades to black (330 ms, ease). No name screen, no "Opening".
+- The launch intent fires at 450 ms, once the screen is dark; the app fades in over it.
+- v1 had the tile grow to fill the screen, then a brand-color name screen. Owner, 2026-10-26: TV banners are only ~320x180, so blown up to full screen they look soft, and the name screen didn't fit SLATE.
+- If nothing came up, the screen resets after 4 s (MainActivity), and always on return.
 - Settings button: opens settings straight away (no growth), like the wheel's gear.
 
 ## Settings (Slate style)
