@@ -48,7 +48,7 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
         fun closeSettings()
         fun homeModes(): List<String>     // WHEEL plus the games built into this flavor
         fun homeMode(): String            // one of homeModes()
-        fun cycleHomeMode()
+        fun setHomeMode(mode: String)
         fun openAppList()
         fun soundOn(): Boolean
         fun toggleSound()
@@ -56,7 +56,9 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
         fun toggleStats()
         fun backdrop(): Bitmap?           // SLATE: the photo on the home screen, behind its settings
         fun favoriteColor(): String       // POCKET: the name pill and the selection frame
-        fun cycleFavoriteColor()
+        fun favoriteColors(): List<String>
+        fun setFavoriteColor(name: String)
+        fun openPerformance()          // PERFORMANCE: what is using memory, CPU, storage
     }
 
     private companion object {
@@ -72,7 +74,7 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
         const val LIST_TOP = 330f
         const val VALUE_X = 1100f
         val HOMES = setOf("WHEEL", "SLATE", "POCKET")  // full home screens; the others are games with an APP LIST row
-        val MAIN = listOf("SYSTEM SETTINGS", "INPUTS", "HOME MODE", "SOUND", "STATS FOR NERDS", "NAME", "WEATHER LOCATION", "HIDDEN APPS", "ABOUT")
+        val MAIN = listOf("SYSTEM SETTINGS", "INPUTS", "HOME MODE", "SOUND", "STATS FOR NERDS", "NAME", "WEATHER LOCATION", "HIDDEN APPS", "PERFORMANCE", "ABOUT")
         const val ROW_SP = 104f
         const val LAST_ROW = 1000f  // lowest row center
         const val HUNT_VALUE = 0xFFBCBCBC.toInt()  // HUNT style: values and visible apps
@@ -134,6 +136,7 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
 
     /** Called each time the screen opens: start on the main list, top row. */
     fun open() {
+        picker = null
         page = Page.MAIN
         rows = mainRows()
         mainSel = 0
@@ -169,6 +172,18 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
         // lists scroll on key repeat; OK and BACK act once
         if (e.repeatCount > 0 && code != KeyEvent.KEYCODE_DPAD_UP && code != KeyEvent.KEYCODE_DPAD_DOWN) return true
 
+        picker?.let { p ->
+            when (code) {
+                KeyEvent.KEYCODE_DPAD_DOWN -> if (p.sel < p.options.size - 1) p.sel++
+                KeyEvent.KEYCODE_DPAD_UP -> if (p.sel > 0) p.sel--
+                KeyEvent.KEYCODE_BACK -> picker = null
+                KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> Unit
+                else -> { picker = null; p.pick(p.options[p.sel]) }
+            }
+            invalidate()
+            return true
+        }
+
         when (page) {
             Page.MAIN -> when (code) {
                 KeyEvent.KEYCODE_DPAD_DOWN -> if (mainSel < rows.size - 1) mainSel++
@@ -196,8 +211,9 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
             "APP LIST" -> host.openAppList()
             "SYSTEM SETTINGS" -> host.openSystemSettings()
             "INPUTS" -> host.openInputs()
-            "HOME MODE" -> { host.cycleHomeMode(); modeChanged() }
-            "FAVORITE COLOR" -> host.cycleFavoriteColor()
+            "HOME MODE" -> openPicker("HOME MODE", host.homeModes(), host.homeMode()) { host.setHomeMode(it); modeChanged() }
+            "FAVORITE COLOR" -> openPicker("FAVORITE COLOR", host.favoriteColors(), host.favoriteColor()) { host.setFavoriteColor(it) }
+            "PERFORMANCE" -> host.openPerformance()
             "SOUND" -> host.toggleSound()
             "STATS FOR NERDS" -> host.toggleStats()
             "NAME" -> host.editName()
@@ -210,6 +226,78 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
                 scrollTo(false)
             }
             "ABOUT" -> { about = host.about(); page = Page.ABOUT }
+        }
+    }
+
+    // ---------- picker: a pop-up list for settings with many choices (HOME MODE, FAVORITE COLOR) ----------
+    private class Picker(val title: String, val options: List<String>, val current: String, var sel: Int, val pick: (String) -> Unit)
+    private var picker: Picker? = null
+
+    private fun openPicker(title: String, options: List<String>, current: String, pick: (String) -> Unit) {
+        picker = Picker(title, options, current, options.indexOf(current).coerceAtLeast(0), pick)
+    }
+
+    /** The pop-up over whichever settings style is showing: dot matrix, HUNT pixels, or SLATE. */
+    private fun drawPicker(c: Canvas) {
+        val p = picker ?: return
+        fill.color = 0xB3000000.toInt()
+        c.drawRect(0f, 0f, W, H, fill)
+        val n = p.options.size
+        when {
+            slate -> {
+                val rowH = 72f; val w = 640f; val h = 96f + n * rowH + 16f
+                val x = (W - w) / 2; val y = (H - h) / 2
+                fill.color = 0xFF2C2C2E.toInt()
+                c.drawRoundRect(x, y, x + w, y + h, 28f, 28f, fill)
+                sHead.textAlign = Paint.Align.CENTER
+                c.drawText(slateLabels[p.title] ?: titleCase(p.title), W / 2, y + 60f, sHead)
+                sHead.textAlign = Paint.Align.LEFT
+                for ((i, o) in p.options.withIndex()) {
+                    val ry = y + 88f + i * rowH
+                    val on = i == p.sel
+                    if (on) { fill.color = 0xFFF5F5F7.toInt(); c.drawRoundRect(x + 12f, ry, x + w - 12f, ry + rowH - 4f, 18f, 18f, fill) }
+                    sLabel.color = if (on) 0xFF0A0A0C.toInt() else 0xFFF5F5F7.toInt()
+                    c.drawText(titleCase(o), x + 40f, ry + 46f, sLabel)
+                    if (o == p.current) {
+                        sValue.color = if (on) 0xFF3A3A3C.toInt() else 0xFF8E8E93.toInt()
+                        c.drawText("Current", x + w - 40f, ry + 46f, sValue)
+                    }
+                }
+            }
+            hunt -> {
+                val rowH = 70f; val w = 760f; val h = 150f + n * rowH
+                val x = (W - w) / 2; val y = (H - h) / 2
+                huntRect.color = Pixel.INK; c.drawRect(x, y, x + w, y + h, huntRect)
+                huntRect.color = Pixel.PAPER; c.drawRect(x + 12, y + 12, x + w - 12, y + h - 12, huntRect)
+                huntRect.color = Pixel.INK; c.drawRect(x + 24, y + 24, x + w - 24, y + h - 24, huntRect)
+                Pixel.text(c, p.title, (W - Pixel.textW(p.title, 7f)) / 2, y + 56f, 7f, Pixel.PAPER)
+                for ((i, o) in p.options.withIndex()) {
+                    val ry = y + 130f + i * rowH
+                    val on = i == p.sel
+                    if (on) Pixel.text(c, ">", x + 80f, ry, 6f, Pixel.PAPER)
+                    Pixel.text(c, o, x + 130f, ry, 6f, if (on) Pixel.PAPER else if (o == p.current) Pixel.SKY_BAND else Pixel.GRAY)
+                }
+            }
+            else -> {
+                val rowH = 84f; val cell = 7f; val w = 900f; val h = 170f + n * rowH
+                val x = (W - w) / 2; val y = (H - h) / 2
+                fill.color = 0xFF0E0F12.toInt()
+                c.drawRect(x, y, x + w, y + h, fill)
+                fill.color = 0xFF1F2126.toInt()
+                c.drawRect(x, y, x + w, y + 1, fill); c.drawRect(x, y + h - 1, x + w, y + h, fill)
+                c.drawRect(x, y, x + 1, y + h, fill); c.drawRect(x + w - 1, y, x + w, y + h, fill)
+                Dots.text(c, p.title, x + 80f, y + 50f, 5f, Dots.MUTE, false)
+                for ((i, o) in p.options.withIndex()) {
+                    val cy = y + 150f + i * rowH
+                    val on = i == p.sel
+                    if (on) {
+                        fill.shader = null; fill.color = Dots.FG
+                        c.drawCircle(x + 46f, cy, 5f, fill)
+                    }
+                    Dots.text(c, o, x + 80f, cy - 3.5f * cell, cell, if (on) Dots.FG else Dots.MUTE, on, Dots.SEL_GRID)
+                    if (o == p.current) value(c, "CURRENT", cy, if (on) Dots.FG else VALUE)
+                }
+            }
         }
     }
 
@@ -243,11 +331,13 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
         canvas.scale(width / W, height / H)
         if (slate) {
             drawSlate(canvas)
+            drawPicker(canvas)
             canvas.restore()
             return
         }
         if (hunt) {
             drawHunt(canvas)
+            drawPicker(canvas)
             canvas.restore()
             return
         }
@@ -263,6 +353,7 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
             Page.HIDDEN -> drawHidden(canvas)
             Page.ABOUT -> drawAbout(canvas)
         }
+        drawPicker(canvas)
         canvas.restore()
     }
 
@@ -435,12 +526,14 @@ class SettingsView(ctx: Context, private val host: Host) : View(ctx) {
         "General" to listOf("SYSTEM SETTINGS", "INPUTS"),
         "Home" to listOf("HOME MODE", "SOUND", "STATS FOR NERDS"),
         "You" to listOf("NAME", "WEATHER LOCATION"),
-        "Apps" to listOf("HIDDEN APPS", "ABOUT"),
+        "Apps" to listOf("HIDDEN APPS"),
+        "Device" to listOf("PERFORMANCE", "ABOUT"),
     )
     private val slateLabels = mapOf(
         "SYSTEM SETTINGS" to "System Settings", "INPUTS" to "Inputs", "HOME MODE" to "Home Mode", "SOUND" to "Sound",
         "STATS FOR NERDS" to "Stats for Nerds", "NAME" to "Name", "WEATHER LOCATION" to "Weather Location",
-        "HIDDEN APPS" to "Hidden Apps", "ABOUT" to "About",
+        "HIDDEN APPS" to "Hidden Apps", "PERFORMANCE" to "Performance", "ABOUT" to "About",
+        "FAVORITE COLOR" to "Favorite Color",
     )
     private val S_LEFT = 460f
     private val S_RIGHT = 1460f

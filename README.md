@@ -20,7 +20,7 @@ Every build has the wheel, SLATE and POCKET. The game modes are optional (see [F
 | **HUNT**. An 8-bit duck hunt: each duck is an app. Left/Right picks a duck, tap OK to shoot (1 in 4 hits), hold OK for a guaranteed hit. The dog pops up to react. | ![Hunt](docs/screens/hunt.png) |
 | **PONG**. Pong against a CPU that never misses. The right edge is a beam of light in one service's brand color; every return moves it to the next service. Miss the ball and that service opens (SETTINGS is in the cycle too). Hold Up/Down to move. | |
 
-Settings (gear on the wheel and SLATE, the SETTINGS tile in POCKET, SETTINGS on each game's start screen): SYSTEM SETTINGS, INPUTS, HOME MODE, SOUND, **NAME** (the greeting is HELLO &lt;NAME&gt;, default SEEKER), **WEATHER LOCATION** (any city, default Denver), HIDDEN APPS, ABOUT.
+Settings (gear on the wheel and SLATE, the SETTINGS tile in POCKET, SETTINGS on each game's start screen): SYSTEM SETTINGS, INPUTS, HOME MODE (a pop-up list of the modes), FAVORITE COLOR (POCKET only, also a pop-up), SOUND, STATS FOR NERDS, **NAME** (the greeting is HELLO &lt;NAME&gt;, default SEEKER), **WEATHER LOCATION** (any city, default Denver), HIDDEN APPS, **PERFORMANCE** (what is using memory, CPU and storage, per app: see below), ABOUT.
 
 ## Flavors
 
@@ -45,6 +45,7 @@ Download them from [Releases](../../releases).
 - **The HOME switch.** Seeker ships its HOME entry (`.Home`) disabled, because an enabled HOME candidate can make Android drop your current preferred HOME. Seeker turns it on itself when it receives `com.seeker.tv.HOME_ALIAS`, then `cmd package set-home-activity` makes it HOME.
 - **RAM.** On the reference TV, launcherx plus its `coreservices` process used about 305 MB RSS. Seeker uses about 26 MB PSS on the wheel and 35 to 47 MB PSS while a game is being played. SLATE uses more, about 96 MB PSS on an onn 4K Pro, mostly its two full-screen photos and the tile art. Free RAM two minutes after boot went from 91 MB (stock) to 163 MB with Seeker as HOME. (Android quickly fills freed RAM with cached apps, so treat these as rough.)
 - **Weather** comes from [Open-Meteo](https://open-meteo.com) (no API key). The city you type is looked up with Open-Meteo's geocoder; only the coordinates are stored, on the TV.
+- **PERFORMANCE** reads `dumpsys meminfo`, `top` and `dumpsys diskstats` through the TV's own network debugging port (127.0.0.1:5555), because Android 14 hides other apps' memory and CPU from normal apps. Seeker uses its own adb key: the first time, the TV asks "Allow USB debugging?" for Seeker; choose Always allow. It only connects while that screen is open. To take the access back, use Developer options > Revoke USB debugging authorizations (your PC will be asked again too). If network debugging is off (e.g. after some reboots), the screen says so.
 - **Optional permissions**, both granted over adb: `WRITE_SECURE_SETTINGS` lets Seeker keep animations at 0.5x (snappier), and the `SYSTEM_ALERT_WINDOW` app-op lets `com.seeker.tv.NOTIFY` broadcasts show as toasts over other apps.
 
 ## Requirements
