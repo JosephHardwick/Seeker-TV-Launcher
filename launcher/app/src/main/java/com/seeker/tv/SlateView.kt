@@ -387,8 +387,16 @@ class SlateView(
             return true
         }
         when (code) {
-            KeyEvent.KEYCODE_DPAD_RIGHT -> if (!onGear && sel < apps.size - 1) { sel++; moveFocus(sweep = true) }
-            KeyEvent.KEYCODE_DPAD_LEFT -> if (!onGear && sel > 0) { sel--; moveFocus(sweep = true) }
+            // the row wraps: past the last app is the first, and back. Holding the key stops at the ends
+            // (only a fresh press wraps), so a held RIGHT doesn't spin round forever.
+            KeyEvent.KEYCODE_DPAD_RIGHT -> if (!onGear && apps.size > 1) {
+                if (sel < apps.size - 1) { sel++; moveFocus(sweep = true) }
+                else if (e.repeatCount == 0) { sel = 0; moveFocus(sweep = true) }
+            }
+            KeyEvent.KEYCODE_DPAD_LEFT -> if (!onGear && apps.size > 1) {
+                if (sel > 0) { sel--; moveFocus(sweep = true) }
+                else if (e.repeatCount == 0) { sel = apps.size - 1; moveFocus(sweep = true) }
+            }
             KeyEvent.KEYCODE_DPAD_DOWN -> if (!onGear) { onGear = true; moveFocus(sweep = false) }
             KeyEvent.KEYCODE_DPAD_UP -> if (onGear) { onGear = false; moveFocus(sweep = true) }
             KeyEvent.KEYCODE_BACK -> host.back()

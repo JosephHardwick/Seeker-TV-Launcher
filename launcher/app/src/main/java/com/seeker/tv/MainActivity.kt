@@ -52,6 +52,8 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
     private var backdrop: Backdrop? = null
     /** HOME MODE POCKET's screen, built the first time it's shown. */
     private var pocket: PocketView? = null
+    /** Settings > PERFORMANCE. */
+    private var perf: PerfView? = null
     private var settings: SettingsView? = null
     /** Game screens built so far, by HOME MODE name. Only the flavor's BuiltModes can appear here. */
     private val games = HashMap<String, GameScreen>()
@@ -170,6 +172,7 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
         main.removeCallbacks(statsTick)
         startStats()
         refreshPhotos()
+        perf?.let { if (shown === it) it.start() }  // back on the PERFORMANCE screen: resume reading
     }
 
     override fun onResume() {
@@ -191,6 +194,7 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
             main.removeCallbacks(weatherTick)
             main.removeCallbacks(statsTick)
             homes().forEach { it.resetLaunch(); it.resetModes() }  // come back to a clean home screen
+            perf?.stop()
             gamesToStart()       // the games: HOME always shows START, never mid-game
             if (wheelVisit) { wheelVisit = false; if (shown === view) showHome() }
         }
@@ -219,6 +223,7 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
         if (Log.isLoggable(TAG, Log.DEBUG)) Log.d(TAG, "key $event")
         val handled = when (val cur = shown) {
             is SettingsView -> cur.onKey(event)
+            is PerfView -> cur.onKey(event)
             is GameScreen -> cur.onKey(event)
             is HomeScreen -> cur.onKey(event)
             else -> false
@@ -312,10 +317,10 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
 
     override fun homeMode(): String = prefs.getString("home_mode", null)?.takeIf { it in NotifyService.MODES } ?: "WHEEL"
 
-    override fun cycleHomeMode() {
-        val next = NotifyService.MODES[(NotifyService.MODES.indexOf(homeMode()) + 1) % NotifyService.MODES.size]
-        prefs.edit().putString("home_mode", next).apply()
-        Log.i(TAG, "HOME MODE = $next (settings)")
+    override fun setHomeMode(mode: String) {
+        if (mode !in NotifyService.MODES) return
+        prefs.edit().putString("home_mode", mode).apply()
+        Log.i(TAG, "HOME MODE = $mode (settings)")
     }
 
     override fun soundOn(): Boolean = prefs.getBoolean("sound", true)
@@ -349,9 +354,17 @@ class MainActivity : Activity(), SeekerView.Host, SettingsView.Host, GameHost {
 
     override fun favoriteColor(): String = prefs.getString("pocket_color", null)?.takeIf { it in POCKET_COLORS } ?: POCKET_COLORS.keys.first()
 
-    override fun cycleFavoriteColor() {
-        val names = POCKET_COLORS.keys.toList()
-        prefs.edit().putString("pocket_color", names[(names.indexOf(favoriteColor()) + 1) % names.size]).apply()  // the listener redraws
+    override fun favoriteColors(): List<String> = POCKET_COLORS.keys.toList()
+
+    override fun setFavoriteColor(name: String) {
+        if (name in POCKET_COLORS) prefs.edit().putString("pocket_color", name).apply()  // the listener redraws
+    }
+
+    /** PERFORMANCE in settings; BACK returns to settings where it was. */
+    override fun openPerformance() {
+        val p = perf ?: PerfView(this) { settings?.let { show(it) } ?: showHome() }.also { perf = it }
+        show(p)
+        p.start()
     }
 
     override fun openAppList() {
